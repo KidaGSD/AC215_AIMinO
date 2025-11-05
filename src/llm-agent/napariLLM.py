@@ -2,8 +2,8 @@ import os, re, json, time, requests
 from pathlib import Path
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field, confloat, ValidationError, TypeAdapter
-import napari
-from qtpy import QtWidgets
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from huggingface_hub import InferenceClient
 
 # ======================
