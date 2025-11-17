@@ -59,10 +59,10 @@ Respond with JSON ONLY. Task: {{sub_task}}
 
 ## 4. Adding a Worker
 
-1. **Determine Action Coverage**: ensure schema支持 and there is a registered handler in `aimino_core/handlers/` (or add one with `@register_handler`).
+1. **Determine Action Coverage**: ensure schema support and there is a registered handler in `aimino_core/handlers/` (or add one with `@register_handler`).
 2. **Write Handbook Entry**: add a markdown in `handbooks/` describing responsibilities and field definitions. `src/server/workers` will load it at runtime.
 3. **Define Worker**: In `src/server/workers/__init__.py`, call `_build_worker` to create the LlmAgent and add it to the `get_workers()` dictionary.
-4. **注册 Manager**: 调整 `NapariLeadManager` 的 `workers` 字典映射，确保新的 `worker_type` 能找到上述实例。
+4. **Registar Manager**: Adjust `NapariLeadManager`'s `workers` dictionary，make sure `worker_type` can find that instance。
 5. **Document**: add to the table above, update tests, and record the change in `Integration_Progress.md`.
 
 ---
