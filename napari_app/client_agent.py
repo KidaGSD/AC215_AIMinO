@@ -53,14 +53,14 @@ class AgentClient:
             return result.get("final_commands", [])
         except requests.exceptions.ConnectionError:
             raise ConnectionError(
-                f"无法连接到API服务器 {self.api_url}。"
-                f"请确保服务器正在运行。"
+                f"Unable to connect to API server {self.api_url}. "
+                f"Please ensure the server is running."
             )
         except requests.exceptions.Timeout:
             raise TimeoutError(
-                f"API请求超时。服务器 {self.api_url} 响应时间过长。"
+                f"API request timeout. Server {self.api_url} took too long to respond."
             )
         except requests.exceptions.HTTPError as e:
             raise RuntimeError(
-                f"API请求失败: {e.response.status_code} - {e.response.text}"
+                f"API request failed: {e.response.status_code} - {e.response.text}"
             )
