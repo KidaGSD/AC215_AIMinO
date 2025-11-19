@@ -114,11 +114,13 @@ Deliverables:
 
 ---
 
-## Phase 6 — Containerization (1–2d) - Yuan
+## Phase 6 — Containerization (1–2d) - Yuan - waiting for folder restructure
 
 - Add `src/server/Dockerfile` and runtime entry script.
 - Publish a `docker-compose.server.yml` for local run.
 - Build-time injection of handbooks; runtime env for keys.
+- Containerize the server
+- Test on Google Cloud Run
 
 Deliverables:
 - Server container serving `/invoke`; client connects via `SERVER_URL`.
