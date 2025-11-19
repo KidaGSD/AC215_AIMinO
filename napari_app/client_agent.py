@@ -1,55 +1,66 @@
-"""Client-side shim for invoking the server lead manager."""
+"""Client-side shim for invoking the server lead manager via HTTP API."""
 
 from __future__ import annotations
 
-import json
-import uuid
-from typing import List
+import os
+from typing import List, Optional
 
-from google.genai import types
-
-# call the build runner from the server to build
-from src.server.agents.napari_manager import build_runner
-
-APP_NAME = "napari_adk_app"
-USER_ID = "local_user"
+import requests
 
 
 class AgentClient:
-    def __init__(self) -> None:
-        self.session_service, self.runner = build_runner()
-
-    async def invoke(self, user_input: str) -> List[dict]:
-        session_id = uuid.uuid4().hex
-        initial_state = {"user_input": user_input}
-        await self.session_service.create_session(
-            app_name=APP_NAME,
-            user_id=USER_ID,
-            session_id=session_id,
-            state=initial_state,
-        )
-
-        events = self.runner.run_async(
-            user_id=USER_ID,
-            session_id=session_id,
-            new_message=types.Content(
-                role="user",
-                parts=[types.Part(text=user_input)],
-            ),
-        )
-
-        async for _event in events:
-            pass
-
-        final_session = await self.session_service.get_session(
-            app_name=APP_NAME,
-            user_id=USER_ID,
-            session_id=session_id,
-        )
-        commands = final_session.state.get("final_commands", [])
-        if isinstance(commands, str):
-            try:
-                commands = json.loads(commands)
-            except json.JSONDecodeError:
-                commands = []
-        return commands
+    """Client for communicating with remote Napari agent API server."""
+    
+    def __init__(self, api_url: Optional[str] = None) -> None:
+        """
+        Initialize the client.
+        
+        Args:
+            api_url: Base URL of the API server. If None, reads from 
+                    AIMINO_API_URL environment variable or defaults to 
+                    http://localhost:8000
+        """
+        self.api_url = api_url or os.getenv(
+            "AIMINO_API_URL", 
+            "http://localhost:8000"
+        ).rstrip("/")
+    
+    def invoke(self, user_input: str, context: Optional[dict] = None) -> List[dict]:
+        """
+        Invoke the remote agent with user input.
+        
+        Args:
+            user_input: The user's natural language command
+            context: Optional context dictionary to pass to the agent
+            
+        Returns:
+            List of command dictionaries to execute
+            
+        Raises:
+            requests.RequestException: If the API request fails
+        """
+        url = f"{self.api_url}/invoke"
+        payload = {
+            "user_input": user_input,
+        }
+        if context:
+            payload["context"] = context
+        
+        try:
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            result = response.json()
+            return result.get("final_commands", [])
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError(
+                f"无法连接到API服务器 {self.api_url}。"
+                f"请确保服务器正在运行。"
+            )
+        except requests.exceptions.Timeout:
+            raise TimeoutError(
+                f"API请求超时。服务器 {self.api_url} 响应时间过长。"
+            )
+        except requests.exceptions.HTTPError as e:
+            raise RuntimeError(
+                f"API请求失败: {e.response.status_code} - {e.response.text}"
+            )

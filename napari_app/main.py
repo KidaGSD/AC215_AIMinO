@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import List
 
 import napari
@@ -46,7 +45,7 @@ class CommandDock(QtWidgets.QWidget):
         self.input.clear()
         self.log(f"> {user_text}")
         try:
-            commands = asyncio.run(self.agent.invoke(user_text))
+            commands = self.agent.invoke(user_text)
         except Exception as exc:  # pragma: no cover - UI guard
             self.log(f"[agent error] {exc}")
             return
