@@ -8,7 +8,6 @@ from typing import List
 
 from google.genai import types
 
-# call the build runner from the server to build
 from src.server.agents.napari_manager import build_runner
 
 APP_NAME = "napari_adk_app"

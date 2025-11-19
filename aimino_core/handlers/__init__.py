@@ -11,6 +11,13 @@ DEFAULT_HANDLER_MODULES = [
     ".layers",
     ".viewer",
     ".ui",
+    ".viewer_display.viewer",
+    ".viewer_display.camera",
+    ".viewer_display.dims",
+    ".viewer_display.viewer_model",
+    ".layer_management.layer_creation",
+    ".layer_management.layer_list",
+    ".layer_management.layer_selection",
 ]
 
 _loaded = False
