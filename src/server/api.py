@@ -63,6 +63,7 @@ async def invoke(request: InvokeRequest) -> InvokeResponse:
     Returns:
         Response containing final_commands list
     """
+    print(request)
     if _runner is None or _session_service is None:
         raise HTTPException(
             status_code=503,

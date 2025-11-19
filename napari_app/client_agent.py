@@ -50,6 +50,7 @@ class AgentClient:
             response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
             result = response.json()
+            print(result)
             return result.get("final_commands", [])
         except requests.exceptions.ConnectionError:
             raise ConnectionError(
