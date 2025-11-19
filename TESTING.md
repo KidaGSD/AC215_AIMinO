@@ -14,6 +14,12 @@ This guide explains how to test the frontend-backend connection of the Napari Ag
    export HF_TOKEN=your_huggingface_token_here
    ```
 
+**Check Port 8000**
+lsof -i :8000
+kill -9 <PID>
+
+
+
 
 ## Testing Steps
 
