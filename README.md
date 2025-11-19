@@ -33,6 +33,11 @@ python -m napari_app.main
 ```
 When the Napari window appears, use the right-hand dock to issue commands such as `show nuclei layer` or `center on 200,300`.
 
+New structure:
+- Frontend: `aimino_frontend/napari_app` (Napari UI + ClientAgent)
+- Backend: `aimino_backend/` (ADK Lead Manager + workers + FastAPI scaffolding)
+- Shared: `aimino_core/` (command models + handlers + executor)
+
 ## Current Functionality
 - Command schema + validators (`aimino_core/command_models.py`)
 - Registry-driven handlers for viewer control (layer visibility, panel toggle, zoom, center, set zoom, fit to layer, list layers, help)

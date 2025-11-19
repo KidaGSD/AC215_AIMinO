@@ -4,3 +4,4 @@ src/.env
 Documents/
 MD_Instructions/Agent_Command_Spec.md
 MD_Instructions/Integration_Progress.md
+napari_app/reports
