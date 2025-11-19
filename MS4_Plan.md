@@ -91,6 +91,9 @@ Deliverables:
   - Expose retrieval API `/session/{id}` to fetch recent context.
 - Agent-aware context
   - Lead Manager uses the last-N commands to bias TaskParser; add a small “system facts” section to prompts.
+- Definition:
+  - Context: What we are sending to the AI agent at the moment(Current session **user action** + Command(**Right now** + session history(?))
+  - Memory: Storage of multiple sessions
 
 Deliverables:
 - Round trip context capture and basic retrieval; unit tests on server storage layer.
