@@ -1,0 +1,24 @@
+name: aimino
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - napari
+  - numpy
+  - qtpy
+  - pyqt
+  - scipy
+  - pandas
+  - scikit-image
+  - tifffile
+  - anndata
+  - pip
+  - pip:
+      - google-adk
+      - google-genai
+      - pydantic>=2
+      - typing_extensions
+      - huggingface_hub
+      - requests
+      - fastapi
+      - uvicorn[standard]

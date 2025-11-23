@@ -1,0 +1,5 @@
+encryptionsalt: v1:nZgNqInEDQM=:v1:wsBQB3ts+kiSml4N:XCAnGCiUGVdPi6DejFOC50r4+sO4gg==
+config:
+  gcp:project: alpine-avatar-473401-v1
+  security:ssh_user: sa_115527859985916814812
+  security:gcp_service_account_email: deployment@alpine-avatar-473401-v1.iam.gserviceaccount.com
