@@ -12,7 +12,7 @@ location = os.environ["GCP_REGION"]
 # 🕒 Timestamp for tagging
 timestamp_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 repository_name = "aimino-repository"
-registry_url = f"us-docker.pkg.dev/{project}/{repository_name}"d
+registry_url = f"us-docker.pkg.dev/{project}/{repository_name}"
 
 # Docker Build + Push -> API Service
 # image_config = {
@@ -37,7 +37,7 @@ registry_url = f"us-docker.pkg.dev/{project}/{repository_name}"d
 # Docker Build + Push -> Frontend
 image_config = {
     "image_name": "aimino",
-    "context_path": "../../../AC215_AIMinO",
+    "context_path": "../../aimino/src",
     "dockerfile": "Dockerfile"
 }
 frontend_image = docker_build.Image(

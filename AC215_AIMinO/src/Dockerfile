@@ -16,8 +16,6 @@ RUN python -V && pip install -U pip setuptools wheel
 
 
 ENV CFLAGS="-D_GNU_SOURCE"
-RUN pip install -f https://downloads.openmicroscopy.org/zeroc-ice/3.6/zeroc-ice-cp310/ zeroc-ice==3.6.5
-RUN pip install omero-py
 
 
 # napari removed - users will install it locally

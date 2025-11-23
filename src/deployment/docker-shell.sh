@@ -38,7 +38,7 @@ else
     -v "$SSH_DIR/.ssh":/home/app/.ssh:ro \
     -v "$(pwd)/docker_config.json":/root/.docker/config.json \
     -v "$(pwd)/pulumi-plugins":/root/.pulumi/plugins \
-    -v "$BASE_DIR/../../api-service":/aimino \
+    -v "$BASE_DIR/../../AC215_AIMinO":/aimino \
     -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS \
     -e USE_GKE_GCLOUD_AUTH_PLUGIN=True \
     -e GCP_PROJECT=$GCP_PROJECT \

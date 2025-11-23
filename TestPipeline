@@ -1,8 +1,25 @@
-pulumi stack init dev
-pulumi config set gcp:project ac215-project
+#Following the tutorial; create service account and ssh
+#After git clone this to your local, put secrets folder at ../
 
 
 gcloud artifacts repositories create aimino-repository \
     --location=us \
     --repository-format=docker
+
+
+cd app
+cd deploy_images
+pulumi stack init dev1
+pulumi config set gcp:project alpine-avatar-473401-v1
+
+
+pulumi preview --stack dev1 --refresh
+pulumi up --stack dev1 --refresh -y ## This step use up storage, please try to figure this out
+
+cd deploy_single_vm
+pulumi stack init dev1
+pulumi config set gcp:project alpine-avatar-473401-v1
+pulumi config set security:ssh_user sa_115527859985916814812
+pulumi config set security:gcp_service_account_email deployment@alpine-avatar-473401-v1.iam.gserviceaccount.com
+
 
