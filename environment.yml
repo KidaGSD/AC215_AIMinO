@@ -20,5 +20,9 @@ dependencies:
       - typing_extensions
       - huggingface_hub
       - requests
+      - httpx
+      - fastapi
+      - 'uvicorn[standard]'
+      - pydantic-settings
       - fastapi
       - uvicorn[standard]

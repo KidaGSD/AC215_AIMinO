@@ -5,3 +5,12 @@ Documents/
 MD_Instructions/Agent_Command_Spec.md
 MD_Instructions/Integration_Progress.md
 napari_app/reports
+src/Dev_Instructions/Agent_Command_Spec.md
+cheese-app-v3
+archive
+logs
+doc
+AGENTS.md
+aimino_frontend/aimino_core/aimino_core
+aimino_frontend/aimino_core/aimino_core.egg-info
+.env
