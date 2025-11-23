@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator, Dict, List
+from typing import AsyncGenerator, Dict, List, Optional
 
 from google.adk.agents import BaseAgent, LlmAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -27,6 +27,7 @@ SUPPORTED_ACTIONS = set(available_actions())
 
 class TaskParserInput(BaseModel):
     user_input: str
+    history: Optional[str] = None
 
 
 def _build_task_parser() -> LlmAgent:
@@ -78,6 +79,21 @@ class NapariLeadManager(BaseAgent):
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
+        # Build a compact view of recent session history for this invocation.
+        history_lines: List[str] = []
+        for event in ctx.session.events[-20:]:
+            if not event.content or not event.content.parts:
+                continue
+            texts = [p.text for p in event.content.parts if getattr(p, "text", None)]
+            if not texts:
+                continue
+            history_lines.append(f"{event.author}: " + " ".join(texts))
+        history = "\n".join(history_lines)
+        if len(history) > 2000:
+            history = history[-2000:]
+        ctx.session.state["history"] = history
+        
+
         user_input = ctx.session.state.get("user_input", "")
         yield Event(
             author=self.name,

@@ -11,7 +11,11 @@ import requests
 class AgentClient:
     """Client for communicating with remote Napari agent API server."""
     
-    def __init__(self, api_url: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
         """
         Initialize the client.
         
@@ -19,11 +23,13 @@ class AgentClient:
             api_url: Base URL of the API server. If None, reads from 
                     AIMINO_API_URL environment variable or defaults to 
                     http://localhost:8000
+            session_id: Optional existing session ID to reuse for memory.
         """
         self.api_url = api_url or os.getenv(
             "AIMINO_API_URL", 
             "http://localhost:8000"
         ).rstrip("/")
+        self.session_id: Optional[str] = session_id
     
     def invoke(self, user_input: str, context: Optional[dict] = None) -> List[dict]:
         """
@@ -43,6 +49,8 @@ class AgentClient:
         payload = {
             "user_input": user_input,
         }
+        if self.session_id:
+            payload["session_id"] = self.session_id
         if context:
             payload["context"] = context
         
@@ -50,7 +58,10 @@ class AgentClient:
             response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
             result = response.json()
-            print(result)
+            # Track session ID for future calls (enables memory).
+            session_id = result.get("session_id")
+            if isinstance(session_id, str) and session_id.strip():
+                self.session_id = session_id.strip()
             return result.get("final_commands", [])
         except requests.exceptions.ConnectionError:
             raise ConnectionError(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Dict
+from typing import Dict, Optional
 
 from google.adk.agents import LlmAgent
 from google.genai import types
@@ -17,6 +17,7 @@ GEMINI_MODEL = "gemini-2.0-flash"
 
 class WorkerInput(BaseModel):
     sub_task: str
+    history: Optional[str] = None
 
 
 def _build_worker(name: str, handbook: str) -> LlmAgent:

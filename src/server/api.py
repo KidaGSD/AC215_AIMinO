@@ -45,11 +45,13 @@ class InvokeRequest(BaseModel):
     """Request model for /invoke endpoint."""
     user_input: str
     context: Optional[dict] = None
+    session_id: Optional[str] = None
 
 
 class InvokeResponse(BaseModel):
     """Response model for /invoke endpoint."""
     final_commands: list[dict]
+    session_id: str
 
 
 @app.post("/invoke", response_model=InvokeResponse)
@@ -71,22 +73,33 @@ async def invoke(request: InvokeRequest) -> InvokeResponse:
         )
     
     try:
-        # Create a new session for this request
-        session_id = uuid.uuid4().hex
-        initial_state = {"user_input": request.user_input}
-        
-        # Merge context if provided
+        # Determine session ID: reuse if provided, otherwise create new
+        session_id = request.session_id or uuid.uuid4().hex
+
+        # State updates for this turn
+        state_delta = {"user_input": request.user_input}
         if request.context:
-            initial_state.update(request.context)
-        
-        await _session_service.create_session(
+            state_delta.update(request.context)
+
+        # Ensure session exists, and apply state either as initial state
+        # or as a delta on an existing session.
+        existing = await _session_service.get_session(
             app_name=APP_NAME,
             user_id=USER_ID,
             session_id=session_id,
-            state=initial_state,
         )
-        
-        # Run the agent
+        if existing is None:
+            await _session_service.create_session(
+                app_name=APP_NAME,
+                user_id=USER_ID,
+                session_id=session_id,
+                state=state_delta,
+            )
+            run_state_delta = None
+        else:
+            run_state_delta = state_delta
+
+        # Run the agent on the chosen session
         events = _runner.run_async(
             user_id=USER_ID,
             session_id=session_id,
@@ -94,6 +107,7 @@ async def invoke(request: InvokeRequest) -> InvokeResponse:
                 role="user",
                 parts=[types.Part(text=request.user_input)],
             ),
+            state_delta=run_state_delta,
         )
         
         # Consume all events
@@ -115,7 +129,7 @@ async def invoke(request: InvokeRequest) -> InvokeResponse:
             except json.JSONDecodeError:
                 commands = []
         
-        return InvokeResponse(final_commands=commands)
+        return InvokeResponse(final_commands=commands, session_id=session_id)
     
     except Exception as e:
         raise HTTPException(
