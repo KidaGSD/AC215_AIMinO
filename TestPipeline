@@ -1,0 +1,8 @@
+pulumi stack init dev
+pulumi config set gcp:project ac215-project
+
+
+gcloud artifacts repositories create aimino-repository \
+    --location=us \
+    --repository-format=docker
+

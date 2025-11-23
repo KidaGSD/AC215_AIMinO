@@ -4,13 +4,13 @@
 #set -e
 
 # Define some environment variables
-export IMAGE_NAME="cheese-app-deployment"
+export IMAGE_NAME="aimino-deployment"
 export BASE_DIR=$(pwd)
 export SECRETS_DIR=$(pwd)/../../../secrets/
 export SSH_DIR=$(pwd)/../../../secrets/
 # export SECRETS_DIR=$(pwd)/../../../secrets/ac215-project/
 # export SSH_DIR=$(pwd)/../../../secrets/ac215-project/
-export GCP_PROJECT="ac215-project" # Change to your GCP Project
+export GCP_PROJECT="alpine-avatar-473401-v1" # Change to your GCP Project
 export GCP_REGION="us-central1"
 export GCP_ZONE="us-central1-a"
 export GOOGLE_APPLICATION_CREDENTIALS=/secrets/deployment.json
@@ -38,9 +38,7 @@ else
     -v "$SSH_DIR/.ssh":/home/app/.ssh:ro \
     -v "$(pwd)/docker_config.json":/root/.docker/config.json \
     -v "$(pwd)/pulumi-plugins":/root/.pulumi/plugins \
-    -v "$BASE_DIR/../api-service":/api-service \
-    -v "$BASE_DIR/../frontend-react":/frontend-react \
-    -v "$BASE_DIR/../vector-db":/vector-db \
+    -v "$BASE_DIR/../../api-service":/aimino \
     -e GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS \
     -e USE_GKE_GCLOUD_AUTH_PLUGIN=True \
     -e GCP_PROJECT=$GCP_PROJECT \
