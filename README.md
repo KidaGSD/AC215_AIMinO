@@ -26,7 +26,7 @@ export SERVER_URL=http://127.0.0.1:8000                   # backend HTTP endpoin
 ```
 Run commands in the dock, e.g. `show nuclei layer`, `center on 200,300`.
 
-## Docker (uv-only, cheese-aligned)
+## Docker (uv-based)
 - Build: `DOCKER_BUILDKIT=1 docker build -t aimino-api:dev -f src/api_service/Dockerfile .`
 - Run: `docker run --rm -p 8000:8000 --env-file .env aimino-api:dev`
 - Dev hot-reload with source/core mounts: `HOST_PORT=8030 src/api_service/scripts/docker-shell.sh`
