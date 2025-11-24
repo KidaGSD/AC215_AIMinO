@@ -4,13 +4,14 @@ version = "0.1.0"
 description = "AIMinO FastAPI service (cheese-style)"
 requires-python = ">=3.10"
 dependencies = [
-  "fastapi",
-  "uvicorn[standard]",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.24",
   "pydantic>=2",
   "pydantic-settings>=2",
-  "httpx",
+  "httpx>=0.24",
+  "google-genai",
+  "google-adk",
 ]
 
 [tool.setuptools]
 packages = []
-

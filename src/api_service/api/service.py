@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.state.app_name = "napari_adk_app"
+    app.state.app_name = "aimino_app"
     app.state.user_id = "remote_user"
     app.state.session_service = None
     app.state.runner = None
@@ -69,7 +69,6 @@ def create_app() -> FastAPI:
 
     app.include_router(invoke_router, prefix=settings.AIMINO_API_PREFIX)
     app.include_router(healthz_router, prefix=settings.AIMINO_API_PREFIX)
-
     return app
 
 

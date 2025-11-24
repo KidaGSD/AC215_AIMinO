@@ -146,9 +146,8 @@ class NapariLeadManager(BaseAgent):
 def build_runner() -> tuple[InMemorySessionService, Runner]:
     manager = NapariLeadManager()
     session_service = InMemorySessionService()
-    runner = Runner(agent=manager, app_name="napari_adk_app", session_service=session_service)
+    runner = Runner(agent=manager, app_name="aimino_app", session_service=session_service)
     return session_service, runner
 
 
 __all__ = ["NapariLeadManager", "build_runner"]
-

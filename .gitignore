@@ -1,5 +1,4 @@
 .DS_Store
-~cd "/Users/ytian/Documents/School Courses/Biostatistics_2025Fall/AC 215/Project/Milestone2/AIMinO" && echo "~$*" >> .gitignore
 src/.env
 Documents/
 MD_Instructions/Agent_Command_Spec.md
@@ -14,3 +13,4 @@ AGENTS.md
 aimino_frontend/aimino_core/aimino_core
 aimino_frontend/aimino_core/aimino_core.egg-info
 .env
+**/__pycache__/

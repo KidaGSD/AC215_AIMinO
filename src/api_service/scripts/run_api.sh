@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PYTHONPATH="${PYTHONPATH:-$PWD}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export PYTHONPATH="${PYTHONPATH:-${REPO_ROOT}/src:${REPO_ROOT}/aimino_frontend/aimino_core}"
 export AIMINO_API_PREFIX="${AIMINO_API_PREFIX:-/api/v1}"
 export AIMINO_SERVER_PORT="${AIMINO_SERVER_PORT:-8000}"
 
@@ -13,4 +14,4 @@ if [ -f .env ]; then
   set +a
 fi
 
-exec uvicorn src.api_service.api.service:create_app --factory --host 0.0.0.0 --port "$AIMINO_SERVER_PORT" --reload
+exec uvicorn api_service.api.service:create_app --factory --host 0.0.0.0 --port "$AIMINO_SERVER_PORT" --reload

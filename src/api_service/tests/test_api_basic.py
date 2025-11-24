@@ -1,7 +1,7 @@
 import os
 from fastapi.testclient import TestClient
 
-from src.api_service.api.service import create_app
+from api_service.api.service import create_app
 
 
 class DummySession:
