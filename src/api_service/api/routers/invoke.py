@@ -10,6 +10,7 @@ from google.genai import types
 
 from ..utils.schemas import InvokeRequest, InvokeResponse, ErrorResponse
 from ..utils.logging import write_jsonl
+from ..utils.config import settings
 import logging
 
 router = APIRouter()

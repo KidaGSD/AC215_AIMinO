@@ -35,7 +35,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Copy and install shared core
 COPY --chown=app:app aimino_frontend/aimino_core /app/aimino_core
-RUN pip install --no-cache-dir /app/aimino_core
+RUN uv pip install --no-cache-dir /app/aimino_core
 
 EXPOSE 8000
 

@@ -14,4 +14,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["aimino_core", "aimino_core.handlers"]
-package-dir = {"" = "."}
+package-dir = {"aimino_core" = "."}
