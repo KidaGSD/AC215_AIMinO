@@ -89,23 +89,25 @@ jobs:
       - name: Run unit tests
         run: |
           docker run --rm \
+            --entrypoint /bin/sh \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e AIMINO_SKIP_STARTUP=1 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             aimino-api:${{ github.sha }} \
-            sh -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit"
+            -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit"
 
       - name: Generate coverage report
         run: |
           docker run --rm \
+            --entrypoint /bin/sh \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/coverage:/workspace/coverage \
             -w /workspace \
             -e AIMINO_SKIP_STARTUP=1 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             aimino-api:${{ github.sha }} \
-            sh -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/unit/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage -m unit"
+            -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/unit/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage -m unit"
         continue-on-error: true
 
       - name: Upload coverage report
@@ -137,23 +139,25 @@ jobs:
       - name: Run integration tests
         run: |
           docker run --rm \
+            --entrypoint /bin/sh \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e AIMINO_SKIP_STARTUP=1 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             aimino-api:${{ github.sha }} \
-            sh -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/integration/ -v --tb=short -m integration"
+            -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/integration/ -v --tb=short -m integration"
 
       - name: Generate coverage report
         run: |
           docker run --rm \
+            --entrypoint /bin/sh \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/coverage:/workspace/coverage \
             -w /workspace \
             -e AIMINO_SKIP_STARTUP=1 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             aimino-api:${{ github.sha }} \
-            sh -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/integration/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage --cov-append -m integration"
+            -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && pip install -e /workspace/aimino_frontend/aimino_core && python -m pytest tests/integration/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage --cov-append -m integration"
         continue-on-error: true
 
       - name: Upload coverage report
@@ -207,12 +211,14 @@ jobs:
       - name: Run system tests
         run: |
           docker run --rm --network host \
+            --entrypoint /bin/sh \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e API_BASE_URL=http://localhost:8000 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
+            -e AIMINO_SKIP_STARTUP=1 \
             aimino-api:${{ github.sha }} \
-            sh -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-mock requests && python -m pytest tests/system/ -v --tb=short -m system"
+            -c "export PATH=/home/app/.local/bin:\$PATH && pip install pytest pytest-mock requests && python -m pytest tests/system/ -v --tb=short -m system"
 
       - name: Show server logs
         if: always()
