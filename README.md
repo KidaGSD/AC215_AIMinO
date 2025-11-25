@@ -11,9 +11,10 @@
 │   ├── api_service/           # Backend (server agents)
 │   └── deployment/            # Deployment configurations (for milestone 5)
 ├── tests/                     # Testing pipeline (Unit, Integration, System)
+├── test_results/              # Test results (for milestone 4)
 ├── docker-compose.test.yml    # Test orchestration
-└── environment.yml            # Conda environment specification
-└── .env.example               # Environment variables example
+├── environment.yml            # Conda environment specification
+├── .env.example               # Environment variables example
 └── .github/                   # GitHub Actions CI/CD pipeline
 
 ```
