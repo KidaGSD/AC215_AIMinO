@@ -15,7 +15,7 @@ services:
     networks:
       - test-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/healthz"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/healthz" ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -29,7 +29,7 @@ services:
     depends_on:
       api_service:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     environment:
       - PYTHONPATH=/app/src:/app/aimino_frontend/aimino_core
       - API_BASE_URL=http://api_service:8000
@@ -39,31 +39,12 @@ services:
       - ./tests:/app/tests
       - ./src/api_service/tests:/app/src/api_service/tests
       - ./aimino_frontend/aimino_core:/app/aimino_frontend/aimino_core
+      - ./.git:/app/.git:ro
     networks:
       - test-network
     command: >
-      "
-      export PATH=/home/app/.local/bin:$PATH &&
-      echo '=== Installing test dependencies ===' &&
-      pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk &&
-      echo '' &&
-      echo '=== Installing aimino_core package ===' &&
-      pip install -e /app/aimino_frontend/aimino_core &&
-      echo '' &&
-      echo '=== Running Unit Tests ===' &&
-      python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit || true &&
-      echo '' &&
-      echo '=== Running Integration Tests ===' &&
-      python -m pytest tests/integration/ -v --tb=short -m integration || true &&
-      echo '' &&
-      echo '=== Running System Tests ===' &&
-      python -m pytest tests/system/ -v --tb=short -m system || true &&
-      echo '' &&
-      echo '=== Generating Coverage Report ===' &&
-      python -m pytest tests/unit/ tests/integration/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=html:coverage --cov-report=xml --cov-fail-under=50 || echo 'Coverage below 50%, but continuing...'
-      "
+      " export PATH=/home/app/.local/bin:$PATH && git config --global --add safe.directory /app && echo '=== Installing test dependencies ===' && pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && echo '' && echo '=== Installing aimino_core package ===' && pip install -e /app/aimino_frontend/aimino_core && echo '' && echo '=== Running Unit Tests ===' && python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit || true && echo '' && echo '=== Running Integration Tests ===' && python -m pytest tests/integration/ -v --tb=short -m integration || true && echo '' && echo '=== Running System Tests ===' && python -m pytest tests/system/ -v --tb=short -m system || true && echo '' && echo '=== Generating Coverage Report ===' && python -m pytest tests/unit/ tests/integration/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=html:coverage --cov-report=xml --cov-fail-under=50 || echo 'Coverage below 50%, but continuing...' "
 
 networks:
   test-network:
     driver: bridge
-
