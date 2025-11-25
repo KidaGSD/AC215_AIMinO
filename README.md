@@ -11,7 +11,6 @@
 │   ├── api_service/           # Backend (server agents)
 │   └── deployment/            # Deployment configurations (for milestone 5)
 ├── tests/                     # Testing pipeline (Unit, Integration, System)
-├── test_results/              # Test results (for milestone 4)
 ├── docker-compose.test.yml    # Test orchestration
 ├── environment.yml            # Conda environment specification
 ├── .env.example               # Environment variables example
@@ -21,7 +20,7 @@
 
 ## Additional Testing Results
 
-For more comprehensive CI testing results, please open this [Google Drive link](https://drive.google.com/drive/folders/1aN4ZzHSUJ141f9Ha4mW48-4Augia_E_h?usp=sharing).
+For CI testing results, please open this [Google Drive link](https://drive.google.com/drive/folders/1aN4ZzHSUJ141f9Ha4mW48-4Augia_E_h?usp=sharing).
 
 ## Quick Start
 
