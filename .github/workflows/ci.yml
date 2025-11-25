@@ -59,12 +59,20 @@ jobs:
 
       - name: Run Ruff linter (if available)
         run: |
-          docker run --rm aimino-api:${{ github.sha }} sh -c "pip install ruff || true; ruff check src/api_service/api/ || true" || true
+          docker run --rm \
+            --entrypoint /bin/sh \
+            -e AIMINO_SKIP_STARTUP=1 \
+            aimino-api:${{ github.sha }} \
+            -c "export PATH=/home/app/.venv/bin:\$PATH && pip install ruff || true; ruff check src/api_service/api/ || true" || true
         continue-on-error: true
 
       - name: Run Black formatter check (if available)
         run: |
-          docker run --rm aimino-api:${{ github.sha }} sh -c "pip install black || true; python -m black --check --line-length 120 src/api_service/api/ || true" || true
+          docker run --rm \
+            --entrypoint /bin/sh \
+            -e AIMINO_SKIP_STARTUP=1 \
+            aimino-api:${{ github.sha }} \
+            -c "export PATH=/home/app/.venv/bin:\$PATH && pip install black || true; python -m black --check --line-length 120 src/api_service/api/ || true" || true
         continue-on-error: true
 
   # Job 3: Run unit tests
