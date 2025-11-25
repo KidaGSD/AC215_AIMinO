@@ -1,0 +1,2 @@
+"""AIMinO test suite"""
+

@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# AIMinO
-Agentic AI for Conversational Imaging Control and Cell Type Modeling with OMERO
-=======
 # AIMinO (Napari + Agentic Control)
 
 ## Project layout
@@ -45,14 +41,54 @@ Run commands in the dock, e.g. `show nuclei layer`, `center on 200,300`.
 - Runner app name is unified to `aimino_app`
 
 ## Testing
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
+
+### Quick Start
+
 ```bash
-conda activate aimino
-pip install pytest
-PYTHONPATH=$PWD/src:$PWD/aimino_frontend/aimino_core python -m pytest src/api_service/tests
+# Install test dependencies
+pip install pytest pytest-cov pytest-mock requests
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src/api_service --cov=aimino_frontend/aimino_core --cov-report=html
+
+# Run by category
+pytest -m unit          # Unit tests only
+pytest -m integration   # Integration tests only
+pytest -m system        # System tests (requires running API)
 ```
 
-## Notes / next actions
+### CI/CD
+
+The project includes a GitHub Actions CI pipeline (`.github/workflows/ci.yml`) that:
+
+- ✅ Runs linting checks
+- ✅ Tests across Python 3.10, 3.11, 3.12
+- ✅ Builds and tests Docker image
+- ✅ Runs unit, integration, and system tests
+- ✅ Generates coverage reports (minimum 50% required)
+- ✅ Uploads coverage artifacts
+
+See the Actions tab in GitHub for CI status and coverage reports.
+
+## Docker Compose Testing
+
+### Run All Tests with Service Orchestration
+```bash
+# Build and run all tests (recommended)
+docker-compose -f docker-compose.test.yml up --abort-on-container-exit --exit-code-from test_runner
+
+# View detailed logs
+docker-compose -f docker-compose.test.yml logs
+
+# Clean up after tests
+docker-compose -f docker-compose.test.yml down -v
+```
+
+## Notes
 - Keep `uv.lock` tracked; Dockerfile is uv-only (no requirements.txt).
 - If you see the app_name warning, align the google-adk loader/root agent to `aimino_app`.
-- Add CI (GitHub Actions: build/lint/test/coverage) and deployment docs (compose/GCP) per Milestone4.
->>>>>>> integrate_agentV1_api

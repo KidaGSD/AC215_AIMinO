@@ -13,5 +13,54 @@ dependencies = [
   "google-adk",
 ]
 
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "pytest-mock>=3.0",
+  "pytest-asyncio>=0.21",
+  "requests>=2.28",
+]
+
 [tool.setuptools]
 packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/api_service/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+  "-v",
+  "--tb=short",
+  "--strict-markers",
+  "--cov=src/api_service",
+  "--cov-report=term-missing",
+  "--cov-report=html",
+  "--cov-report=xml",
+  "--cov-fail-under=50",
+]
+markers = [
+  "unit: Unit tests",
+  "integration: Integration tests",
+  "system: System tests",
+  "slow: Slow tests",
+]
+
+[tool.coverage.run]
+source = ["src/api_service", "aimino_frontend/aimino_core"]
+omit = [
+  "*/tests/*",
+  "*/__pycache__/*",
+  "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
