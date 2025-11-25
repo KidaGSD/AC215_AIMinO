@@ -96,7 +96,7 @@ jobs:
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             -e TMPDIR=/tmp \
             aimino-api:${{ github.sha }} \
-            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit"
+            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install setuptools wheel && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/unit/ src/api_service/tests/ -v --tb=short -m unit"
 
       - name: Generate coverage report
         run: |
@@ -109,7 +109,7 @@ jobs:
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             -e TMPDIR=/tmp \
             aimino-api:${{ github.sha }} \
-            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/unit/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage -m unit"
+            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core /workspace/coverage 2>/dev/null || true && uv pip install setuptools wheel && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/unit/ src/api_service/tests/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage -m unit"
         continue-on-error: true
 
       - name: Upload coverage report
@@ -148,7 +148,7 @@ jobs:
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             -e TMPDIR=/tmp \
             aimino-api:${{ github.sha }} \
-            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/integration/ -v --tb=short -m integration"
+            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install setuptools wheel && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/integration/ -v --tb=short -m integration"
 
       - name: Generate coverage report
         run: |
@@ -161,7 +161,7 @@ jobs:
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             -e TMPDIR=/tmp \
             aimino-api:${{ github.sha }} \
-            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core 2>/dev/null || true && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/integration/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage --cov-append -m integration"
+            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace/aimino_frontend/aimino_core /workspace/coverage 2>/dev/null || true && uv pip install setuptools wheel && uv pip install pytest pytest-cov pytest-mock requests fastapi[all] google-genai google-adk && uv pip install --no-build-isolation -e /workspace/aimino_frontend/aimino_core && /home/app/.venv/bin/python -m pytest tests/integration/ --cov=src/api_service --cov-report=term --cov-report=xml --cov-report=html:coverage --cov-append -m integration"
         continue-on-error: true
 
       - name: Upload coverage report
@@ -221,8 +221,9 @@ jobs:
             -e API_BASE_URL=http://localhost:8000 \
             -e PYTHONPATH=/workspace/src:/workspace/aimino_frontend/aimino_core \
             -e AIMINO_SKIP_STARTUP=1 \
+            -e COVERAGE_FILE=/tmp/.coverage \
             aimino-api:${{ github.sha }} \
-            -c "export PATH=/home/app/.venv/bin:\$PATH && uv pip install pytest pytest-cov pytest-mock requests && /home/app/.venv/bin/python -m pytest tests/system/ -v --tb=short -m system"
+            -c "export PATH=/home/app/.venv/bin:\$PATH && chmod -R u+w /workspace 2>/dev/null || true && uv pip install pytest pytest-cov pytest-mock requests && /home/app/.venv/bin/python -m pytest tests/system/ -v --tb=short -m system --cov=src/api_service --cov-report=term"
 
       - name: Show server logs
         if: always()
