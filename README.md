@@ -18,9 +18,9 @@
 
 ```
 
-## Additional Testing Results
+## Additional Files for Milestone 4
 
-For CI testing results, please open this [Google Drive link](https://drive.google.com/drive/folders/1aN4ZzHSUJ141f9Ha4mW48-4Augia_E_h?usp=sharing).
+For CI testing results, solution & technical architecture, and data versioning, please open this [Google Drive link](https://drive.google.com/drive/folders/1aN4ZzHSUJ141f9Ha4mW48-4Augia_E_h?usp=sharing).
 
 ## Quick Start
 
