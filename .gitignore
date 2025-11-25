@@ -15,3 +15,4 @@ aimino_frontend/aimino_core/aimino_core.egg-info
 .env
 **/__pycache__/
 *.egg-info/
+test-run.log
