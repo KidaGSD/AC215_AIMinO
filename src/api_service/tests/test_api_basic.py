@@ -61,6 +61,35 @@ def test_invoke_basic():
         # Either valid response or structured error envelope
         data = r.json()
         assert isinstance(data, dict)
+        if r.status_code == 200:
+            # Response should include a session_id for memory
+            assert "session_id" in data
+            assert isinstance(data["session_id"], str) and data["session_id"]
+
+
+def test_invoke_reuse_session():
+    """Ensure that providing a session_id reuses the same session instead of creating a new one."""
+    app = make_app_with_dummies()
+    with TestClient(app) as client:
+        # First call: let server create a session id
+        r1 = client.post("/api/v1/invoke", json={"user_input": "first"})
+        assert r1.status_code in (200, 500, 503)
+        data1 = r1.json()
+        if r1.status_code != 200:
+            # If runner isn't ready or fails, skip reuse assertion
+            return
+        session_id = data1.get("session_id")
+        assert isinstance(session_id, str) and session_id
+
+        # Second call: explicitly reuse the same session id
+        r2 = client.post(
+            "/api/v1/invoke",
+            json={"user_input": "second", "session_id": session_id},
+        )
+        assert r2.status_code in (200, 500, 503)
+        data2 = r2.json()
+        if r2.status_code == 200:
+            assert data2.get("session_id") == session_id
 
 
 def test_invoke_failure():

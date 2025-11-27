@@ -35,22 +35,47 @@ async def invoke(request: Request, payload: InvokeRequest) -> InvokeResponse:
 
     try:
         t0 = time.time()
-        session_id = uuid.uuid4().hex
-        initial_state = {"user_input": payload.user_input}
-        if payload.context is not None:
-            # Store context under a dedicated key to avoid dict.update on lists
-            initial_state["context"] = payload.context
+        app_name = getattr(app.state, "app_name", "napari_adk_app")
+        user_id = getattr(app.state, "user_id", "remote_user")
+        session_id = payload.session_id or uuid.uuid4().hex
 
-        await session_service.create_session(
-            app_name=getattr(app.state, "app_name", "napari_adk_app"),
-            user_id=getattr(app.state, "user_id", "remote_user"),
-            session_id=session_id,
-            state=initial_state,
-        )
-        log.info("session created", extra={"session_id": session_id})
+        existing_session = None
+        if payload.session_id:
+            try:
+                existing_session = await session_service.get_session(
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+                log.info("reusing existing session", extra={"session_id": session_id})
+            except Exception:
+                existing_session = None
+
+        if existing_session is None:
+            initial_state = {"user_input": payload.user_input}
+            if payload.context is not None:
+                # Store context under a dedicated key to avoid dict.update on lists
+                initial_state["context"] = payload.context
+
+            await session_service.create_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                state=initial_state,
+            )
+            log.info("session created", extra={"session_id": session_id})
+        else:
+            # Update existing session state with new user input (and optional context)
+            state = existing_session.state
+            if not isinstance(state, dict):
+                state = {}
+                existing_session.state = state
+            state["user_input"] = payload.user_input
+            if payload.context is not None:
+                state["context"] = payload.context
 
         events = runner.run_async(
-            user_id=getattr(app.state, "user_id", "remote_user"),
+            user_id=user_id,
             session_id=session_id,
             new_message=types.Content(role="user", parts=[types.Part(text=payload.user_input)]),
         )
@@ -69,6 +94,35 @@ async def invoke(request: Request, payload: InvokeRequest) -> InvokeResponse:
                 commands = json.loads(commands)
             except json.JSONDecodeError:
                 commands = []
+
+        # Append this turn to conversational history so managers/workers
+        # can optionally refer to it in future turns.
+        try:
+            state = final_session.state
+            if not isinstance(state, dict):
+                state = {}
+                final_session.state = state
+            history = state.get("history")
+            if not isinstance(history, list):
+                history = []
+            history.append(
+                {
+                    "user_input": payload.user_input,
+                    "final_commands": commands,
+                }
+            )
+            # Keep history bounded to last 50 turns to avoid unbounded growth
+            if len(history) > 50:
+                history = history[-50:]
+            state["history"] = history
+            log.info(
+                "history updated",
+                extra={"session_id": session_id, "history_len": len(history)},
+                )
+        except Exception:
+            # History is best-effort; never break invoke on failure
+            log.exception("Failed to append to session history")
+
         write_jsonl(
             os.path.join("logs", "server", "server.jsonl"),
             {
@@ -80,7 +134,7 @@ async def invoke(request: Request, payload: InvokeRequest) -> InvokeResponse:
             },
         )
         log.info("commands ready", extra={"count": len(commands), "session_id": session_id})
-        return InvokeResponse(final_commands=commands)
+        return InvokeResponse(session_id=session_id, final_commands=commands)
     except Exception as e:
         log.exception("invoke failed")
         return JSONResponse(

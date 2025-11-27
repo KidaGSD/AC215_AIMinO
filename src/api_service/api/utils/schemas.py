@@ -8,9 +8,12 @@ class InvokeRequest(BaseModel):
     user_input: str
     # Accept a list of dicts to match client context buffer shape
     context: Optional[List[Dict[str, Any]]] = None
+    # Optional session id for reusing existing agent memory
+    session_id: Optional[str] = None
 
 
 class InvokeResponse(BaseModel):
+    session_id: str
     final_commands: List[Dict[str, Any]]
 
 

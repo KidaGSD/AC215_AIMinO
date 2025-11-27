@@ -7,10 +7,10 @@ import asyncio
 
 import napari
 import numpy as np
-from qtpy import QtWidgets
+from qtpy import QtWidgets, QtCore
 
 from aimino_core import CommandExecutionError, execute_command
-from aimino_frontend.napari_app.client_agent import AgentClient
+from aimino_frontend.napari_app.client_agent import AgentClient, load_last_session_id
 
 
 class CommandDock(QtWidgets.QWidget):
@@ -18,6 +18,7 @@ class CommandDock(QtWidgets.QWidget):
         super().__init__()
         self.viewer = viewer
         self.agent = agent
+        self._last_session_id: str | None = load_last_session_id()
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -33,11 +34,27 @@ class CommandDock(QtWidgets.QWidget):
         self.output.setReadOnly(True)
         layout.addWidget(self.output)
 
+        # Optional checkbox to resume last conversation if available
+        self.restore_checkbox = QtWidgets.QCheckBox("Resume last conversation")
+        if not self._last_session_id:
+            self.restore_checkbox.setEnabled(False)
+        layout.addWidget(self.restore_checkbox)
+
         self.run_btn.clicked.connect(self.on_submit)
         self.input.returnPressed.connect(self.on_submit)
+        self.restore_checkbox.stateChanged.connect(self.on_restore_toggled)
 
     def log(self, text: str) -> None:
         self.output.appendPlainText(text)
+
+    def on_restore_toggled(self, state: int) -> None:
+        if state == QtCore.Qt.Checked and self._last_session_id:
+            self.agent.set_session_id(self._last_session_id)
+            self.log(f"[session] Using last session: {self._last_session_id}")
+        else:
+            # When unchecked, clear explicit session so a new one can be created
+            self.agent.set_session_id(None)
+            self.log("[session] A new session will be created on next invoke")
 
     def on_submit(self) -> None:
         user_text = self.input.text().strip()

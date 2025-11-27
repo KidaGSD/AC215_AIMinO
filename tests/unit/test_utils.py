@@ -71,7 +71,8 @@ class TestInvokeResponse:
 
     def test_invoke_response_valid(self):
         """Test valid InvokeResponse creation"""
-        resp = InvokeResponse(final_commands=[{"cmd": "test"}])
+        resp = InvokeResponse(session_id="abc123", final_commands=[{"cmd": "test"}])
+        assert resp.session_id == "abc123"
         assert resp.final_commands[0]["cmd"] == "test"
 
 
