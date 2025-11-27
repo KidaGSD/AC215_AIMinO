@@ -18,6 +18,7 @@ DEFAULT_HANDLER_MODULES = [
     ".layer_visualization.image_layer",
     ".layer_visualization.points_layer",
     ".layer_visualization.shapes_layer",
+    ".layer_visualization.labels_layer",
 ]
 
 _loaded = False
