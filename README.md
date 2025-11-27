@@ -18,9 +18,6 @@
 
 ```
 
-## Additional Testing Results
-
-For CI testing results, please open this [Google Drive link](https://drive.google.com/drive/folders/1aN4ZzHSUJ141f9Ha4mW48-4Augia_E_h?usp=sharing).
 
 ## Quick Start
 
