@@ -32,9 +32,25 @@ def register_default_handlers(registry: Dict[str, CommandHandler]) -> None:
         return
 
     from importlib import import_module
+    import logging
+
+    logger = logging.getLogger(__name__)
 
     for module_name in DEFAULT_HANDLER_MODULES:
-        import_module(module_name, package=__name__)
+        try:
+            import_module(module_name, package=__name__)
+        except ImportError as e:
+            # Log warning but don't fail - some modules may not be available in all environments
+            logger.warning(
+                f"Failed to import handler module {module_name}: {e}. "
+                "This may be expected in some deployment environments."
+            )
+        except Exception as e:
+            # Log other errors but continue
+            logger.error(
+                f"Unexpected error importing handler module {module_name}: {e}",
+                exc_info=True,
+            )
 
     _loaded = True
 

@@ -33,9 +33,8 @@ COPY --chown=app:app src/api_service /app/src/api_service
 COPY --chown=app:app src/api_service/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Copy and install shared core
-COPY --chown=app:app aimino_frontend/aimino_core /app/aimino_core
-RUN uv pip install --no-cache-dir /app/aimino_core
+# Copy shared core (no installation needed, PYTHONPATH already includes /app/aimino_core)
+COPY --chown=app:app aimino_frontend/src/aimino_frontend/aimino_core /app/aimino_core
 
 EXPOSE 8000
 
