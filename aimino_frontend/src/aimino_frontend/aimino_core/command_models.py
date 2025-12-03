@@ -589,6 +589,61 @@ class CmdShapesCurrentFaceColor(BaseModel):
     color: Union[str, list[float]]
 
 
+class CmdLabelsContour(BaseModel):
+    action: Literal["labels_contour"]
+    layer_name: str
+    contour: bool
+
+
+class CmdLabelsNEditDimensions(BaseModel):
+    action: Literal["labels_n_edit_dimensions"]
+    layer_name: str
+    n_edit_dimensions: int
+
+
+class CmdLabelsBrushSize(BaseModel):
+    action: Literal["labels_brush_size"]
+    layer_name: str
+    size: Float
+
+
+class CmdLabelsColormap(BaseModel):
+    action: Literal["labels_colormap"]
+    layer_name: str
+    colormap: str
+
+
+class CmdLabelsContiguous(BaseModel):
+    action: Literal["labels_contiguous"]
+    layer_name: str
+    contiguous: bool
+
+
+class CmdLabelsRendering(BaseModel):
+    action: Literal["labels_rendering"]
+    layer_name: str
+    rendering: str
+
+
+class CmdLabelsIsoGradientMode(BaseModel):
+    action: Literal["labels_iso_gradient_mode"]
+    layer_name: str
+    mode: str
+
+
+class CmdLabelsSelectedLabel(BaseModel):
+    action: Literal["labels_selected_label"]
+    layer_name: str
+    label: int
+
+
+class CmdLabelsMode(BaseModel):
+    action: Literal["labels_mode"]
+    layer_name: str
+    mode: str
+
+
+
 BaseNapariCommand = Union[
     CmdLayerVisibility,
     CmdPanelToggle,

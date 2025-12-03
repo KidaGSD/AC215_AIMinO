@@ -10,7 +10,7 @@ import numpy as np
 from qtpy import QtWidgets, QtCore
 
 from aimino_core import CommandExecutionError, execute_command
-from aimino_frontend.napari_app.client_agent import AgentClient, load_last_session_id
+from napari_app.client_agent import AgentClient, load_last_session_id
 
 
 class CommandDock(QtWidgets.QWidget):
