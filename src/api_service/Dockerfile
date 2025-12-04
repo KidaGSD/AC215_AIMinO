@@ -6,7 +6,9 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy
 ENV UV_PROJECT_ENVIRONMENT=/home/app/.venv
 ENV PATH="/home/app/.venv/bin:${PATH}"
-ENV PYTHONPATH="/app/src:/app/aimino_core"
+# Make both the application sources and /app root importable so that
+# `import aimino_core` resolves to /app/aimino_core/__init__.py
+ENV PYTHONPATH="/app/src:/app"
 
 RUN set -ex; \
     apt-get update && apt-get upgrade -y && \
