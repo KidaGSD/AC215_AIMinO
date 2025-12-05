@@ -1,6 +1,6 @@
 """Minimal Napari launcher wired to AIMinO agent stack."""
 
-from __future__ import annotations
+
 
 from typing import List
 import asyncio
@@ -9,8 +9,8 @@ import napari
 import numpy as np
 from qtpy import QtWidgets, QtCore
 
-from aimino_core import CommandExecutionError, execute_command
-from napari_app.client_agent import AgentClient, load_last_session_id
+from aimino_frontend.aimino_core import CommandExecutionError, execute_command
+from .client_agent import AgentClient, load_last_session_id
 
 
 class CommandDock(QtWidgets.QWidget):
@@ -76,17 +76,64 @@ class CommandDock(QtWidgets.QWidget):
                 self.log(f"[execution error] {exc}")
 
 
+def get_dock_widget(viewer: napari.Viewer) -> CommandDock:
+    """Create and return the AIMinO command dock widget.
+    
+    This function is used by the Napari plugin system to create the dock widget.
+    """
+    agent = AgentClient()
+    dock = CommandDock(viewer, agent)
+    return dock
+
+
+def open_chatbox(viewer: napari.Viewer = None):
+    """Open the AIMinO ChatBox dock widget.
+    
+    This is the entry point for the Napari plugin menu.
+    Returns the widget so it can be used by Napari's widget system.
+    """
+    import logging
+    import napari
+    
+    logger = logging.getLogger("aimino_debug")
+    logger.setLevel(logging.INFO)
+    # Add handler if not present
+    if not logger.handlers:
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        logger.addHandler(ch)
+
+    logger.info(f"DEBUG: open_chatbox called. viewer={viewer}")
+    
+    if viewer is None:
+        logger.warning("DEBUG: viewer is None, attempting fallback to current_viewer()")
+        try:
+            viewer = napari.current_viewer()
+            logger.info(f"DEBUG: Retrieved current_viewer: {viewer}")
+        except Exception as e:
+            logger.error(f"DEBUG: Failed to get current_viewer: {e}")
+            
+    if viewer is None:
+        logger.error("DEBUG: Viewer is still None. Cannot create dock widget.")
+        return None
+
+    dock = get_dock_widget(viewer)
+    return dock
+
+
 def launch() -> None:
+    """Launch Napari with AIMinO agent (standalone mode).
+    
+    This creates a new viewer and adds sample data.
+    """
     viewer = napari.Viewer()
 
     img = np.random.random((256, 256))
     viewer.add_image(img, name="nuclei", visible=True)
     viewer.add_image(img * 0.1, name="cells", visible=False)
 
-    agent = AgentClient()
-    dock = CommandDock(viewer, agent)
-    viewer.window.add_dock_widget(dock, name="AIMinO Agent", area="right")
-
+    dock = open_chatbox(viewer)
+    viewer.window.add_dock_widget(dock, name="AIMinO ChatBox", area="right")
     napari.run()
 
 

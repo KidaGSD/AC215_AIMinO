@@ -183,6 +183,21 @@ class HttpTransport:
 
 class AgentClient:
     def __init__(self) -> None:
+        # Try to load .env file from project root
+        try:
+            from dotenv import load_dotenv
+            # Assuming we are in aimino_frontend/src/aimino_frontend/napari_app/client_agent.py
+            # Project root is likely 4 levels up
+            root_dir = pathlib.Path(__file__).parent.parent.parent.parent.parent
+            env_path = root_dir / ".env"
+            if env_path.exists():
+                load_dotenv(env_path)
+            else:
+                 # Try current working directory
+                 load_dotenv()
+        except ImportError:
+            pass
+
         server_url = os.getenv("SERVER_URL", "").strip().rstrip("/")
         dev_local = os.getenv("DEV_LOCAL_RUNNER", "0").strip() == "1"
         self._context_buffer: deque[dict] = deque(maxlen=20)

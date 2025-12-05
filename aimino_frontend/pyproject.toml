@@ -1,13 +1,14 @@
 [project]
-name = "aimino-frontend"
+name = "aimino"
 version = "0.1.0"
 description = "AIMinO Napari frontend application with command execution and agent client"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
-    {name = "AIMinO Team"}
+    {name = "AIMinO Team: Yingxiao (TK) Shi, Kida Huang, Yinuo Cheng, Yuan Tian"}
 ]
+keywords = ["napari", "bioinformatics", "image-analysis", "ai", "agent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -17,7 +18,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-
 dependencies = [
     "pydantic>=2",
     "typing_extensions",
@@ -26,7 +26,14 @@ dependencies = [
     "qtpy",
     "httpx",
     "google-genai",
+    "pyyaml",
 ]
+
+[project.urls]
+Homepage = "https://github.com/KidaGSD/AC215_AIMinO"
+Documentation = "https://github.com/KidaGSD/AC215_AIMinO#readme"
+Repository = "https://github.com/KidaGSD/AC215_AIMinO"
+Issues = "https://github.com/KidaGSD/AC215_AIMinO/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -50,5 +57,10 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.md", "*.txt"]
+"*" = ["*.md", "*.txt", "*.yaml"]
+
+# Napari plugin entry point (npe2)
+# Use yaml file path format (like napari-svg does)
+[project.entry-points."napari.manifest"]
+aimino = "aimino_frontend.napari_app:napari.yaml"
 

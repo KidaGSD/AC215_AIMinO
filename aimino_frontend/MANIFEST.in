@@ -1,0 +1,16 @@
+# Include README and LICENSE in source distribution
+include README.md
+include LICENSE
+include pyproject.toml
+
+# Include all Python source files
+recursive-include src *.py
+
+# Exclude cache and build artifacts
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+recursive-exclude * __pycache__
+recursive-exclude * *.pyc
+

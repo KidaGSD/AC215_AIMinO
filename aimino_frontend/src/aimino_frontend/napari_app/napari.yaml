@@ -1,0 +1,17 @@
+# Napari plugin manifest (npe2)
+name: aimino
+display_name: AIMinO ChatBox
+version: 0.1.0
+schema_version: 0.1.0
+contributions:
+  commands:
+    - id: aimino.open_chatbox
+      python_name: aimino_frontend.napari_app.main:open_chatbox
+      title: Open ChatBox
+  widgets:
+    - command: aimino.open_chatbox
+      display_name: AIMinO ChatBox
+  menus:
+    napari/plugins:
+      - command: aimino.open_chatbox
+        display_name: AIMinO ChatBox
