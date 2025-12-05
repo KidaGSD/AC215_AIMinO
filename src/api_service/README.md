@@ -1,7 +1,7 @@
 # AIMinO API Service
 
 ## Run (local)
-- Dev (reload): `PYTHONPATH=$PWD/src:$PWD/aimino_frontend/aimino_core src/api_service/scripts/run_api.sh`
+- Dev (reload): `PYTHONPATH=$PWD/src:$PWD/aimino_frontend/src/aimino_frontend/aimino_core src/api_service/scripts/run_api.sh`
 - Docker dev shell (mount + reload): `HOST_PORT=8030 src/api_service/scripts/docker-shell.sh` (mounts repo + aimino_core)
 
 ## Health & Invoke
@@ -22,4 +22,5 @@
 
 ## Notes
 - App name unified to `aimino_app` to avoid runner warnings.
-- `aimino_core` is installed into the image; frontend stays local via `pip install -e aimino_frontend/aimino_core`.
+- `aimino_core` is copied directly into the Docker image at `/app/aimino_core` (no pip install needed, PYTHONPATH includes it).
+- For local development, install the frontend package: `cd aimino_frontend && pip install -e .`
