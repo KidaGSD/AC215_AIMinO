@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2",
     "typing_extensions",
-    "napari",
+    "napari[pyqt5]",
     "numpy",
     "qtpy",
     "httpx",

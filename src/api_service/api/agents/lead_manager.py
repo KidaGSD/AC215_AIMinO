@@ -21,7 +21,7 @@ from .workers import get_workers
 from .handbooks import load_text
 
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 SUPPORTED_ACTIONS = set(available_actions())
 
 

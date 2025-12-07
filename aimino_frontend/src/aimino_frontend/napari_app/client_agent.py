@@ -182,6 +182,9 @@ class HttpTransport:
 
 
 class AgentClient:
+    # Default backend URL for local development
+    DEFAULT_SERVER_URL = "http://127.0.0.1:8000"
+    
     def __init__(self) -> None:
         # Try to load .env file from project root
         try:
@@ -198,15 +201,21 @@ class AgentClient:
         except ImportError:
             pass
 
-        server_url = os.getenv("SERVER_URL", "").strip().rstrip("/")
+        # Check for explicit dev local runner mode (highest priority)
         dev_local = os.getenv("DEV_LOCAL_RUNNER", "0").strip() == "1"
+        if dev_local:
+            self.transport: BaseTransport = LocalRunnerTransport()
+            self._context_buffer: deque[dict] = deque(maxlen=20)
+            return
+        
+        # Get server URL from environment or use default
+        server_url = os.getenv("SERVER_URL", "").strip().rstrip("/")
+        if not server_url:
+            # Use default local backend URL
+            server_url = self.DEFAULT_SERVER_URL
+        
         self._context_buffer: deque[dict] = deque(maxlen=20)
-        if server_url:
-            self.transport: BaseTransport = HttpTransport(server_url)
-        elif dev_local:
-            self.transport = LocalRunnerTransport()
-        else:
-            raise RuntimeError("SERVER_URL not set and DEV_LOCAL_RUNNER!=1; cannot contact backend.")
+        self.transport: BaseTransport = HttpTransport(server_url)
 
     async def invoke(self, user_input: str) -> List[dict]:
         # attach last-N context

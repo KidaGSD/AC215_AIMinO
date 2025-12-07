@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..handbooks import load_text
 
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 class WorkerInput(BaseModel):

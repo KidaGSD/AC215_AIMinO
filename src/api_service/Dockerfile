@@ -1,6 +1,7 @@
 FROM python:3.12-slim-bookworm
 
-ARG DEBIAN_PACKAGES="build-essential curl"
+# System packages needed for napari and image processing libraries
+ARG DEBIAN_PACKAGES="build-essential curl fontconfig libfontconfig1 libgl1-mesa-glx libglib2.0-0"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy

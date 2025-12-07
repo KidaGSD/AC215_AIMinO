@@ -137,9 +137,26 @@ async def invoke(request: Request, payload: InvokeRequest) -> InvokeResponse:
         return InvokeResponse(session_id=session_id, final_commands=commands)
     except Exception as e:
         log.exception("invoke failed")
+        
+        # Provide user-friendly error messages for common issues
+        error_msg = "Invocation failed"
+        error_details = {"error": repr(e)}
+        
+        # Check for Google API quota errors
+        error_str = str(e)
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+            error_msg = "API quota exceeded. Please wait a moment and try again, or check your Google API key and billing settings."
+            error_details["error_type"] = "quota_exceeded"
+            error_details["suggestion"] = "Wait 40-60 seconds before retrying, or check https://ai.dev/usage?tab=rate-limit"
+        elif "API key" in error_str or "authentication" in error_str.lower():
+            error_msg = "API authentication failed. Please check your Google API key configuration."
+            error_details["error_type"] = "authentication_error"
+        
         return JSONResponse(
             status_code=500,
             content=ErrorResponse(
-                code="invoke_error", message="Invocation failed", details={"error": repr(e)}
+                code="invoke_error", 
+                message=error_msg, 
+                details=error_details
             ).model_dump(),
         )

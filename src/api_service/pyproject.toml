@@ -11,6 +11,14 @@ dependencies = [
   "httpx>=0.24",
   "google-genai",
   "google-adk",
+  # Dependencies for special analysis handlers (from aimino_core)
+  # These are needed because aimino_core handlers import these modules
+  "anndata",
+  "tifffile",
+  "scipy",
+  "scikit-image",
+  "numpy",
+  "napari",  # Required for special_analysis handlers that use napari.Viewer
 ]
 
 [project.optional-dependencies]
