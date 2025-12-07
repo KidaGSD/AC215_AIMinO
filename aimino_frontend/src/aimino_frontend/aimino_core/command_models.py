@@ -643,6 +643,47 @@ class CmdLabelsMode(BaseModel):
     mode: str
 
 
+# Special analysis commands for biological image processing
+class CmdLoadMarkerData(BaseModel):
+    action: Literal["special_load_marker_data"]
+    image_path: str
+    h5ad_path: str
+    marker_col: str
+    output_root: Optional[str] = None
+    force_recompute: bool = False
+
+
+class CmdShowMask(BaseModel):
+    action: Literal["special_show_mask"]
+    marker_col: str
+    color: Optional[str] = None
+
+
+class CmdShowDensity(BaseModel):
+    action: Literal["special_show_density"]
+    marker_col: str
+
+
+class CmdUpdateDensity(BaseModel):
+    action: Literal["special_update_density"]
+    marker_col: str
+    image_path: str
+    h5ad_path: str
+    output_root: Optional[str] = None
+    sigma: Optional[Float] = None
+    colormap: Optional[str] = None
+    force: bool = False
+
+
+class CmdComputeNeighborhood(BaseModel):
+    action: Literal["special_compute_neighborhood"]
+    marker_col: str
+    image_path: str
+    h5ad_path: str
+    output_root: Optional[str] = None
+    radius: Optional[Float] = None
+    force_recompute: bool = False
+
 
 BaseNapariCommand = Union[
     CmdLayerVisibility,
@@ -759,6 +800,11 @@ BaseNapariCommand = Union[
     CmdLabelsIsoGradientMode,
     CmdLabelsSelectedLabel,
     CmdLabelsMode,
+    CmdLoadMarkerData,
+    CmdShowMask,
+    CmdShowDensity,
+    CmdUpdateDensity,
+    CmdComputeNeighborhood,
 ]
 
 BaseCommandAdapter = TypeAdapter(BaseNapariCommand)
@@ -881,4 +927,9 @@ __all__ = [
     "CmdLabelsIsoGradientMode",
     "CmdLabelsSelectedLabel",
     "CmdLabelsMode",
+    "CmdLoadMarkerData",
+    "CmdShowMask",
+    "CmdShowDensity",
+    "CmdUpdateDensity",
+    "CmdComputeNeighborhood",
 ]

@@ -27,6 +27,10 @@ dependencies = [
     "httpx",
     "google-genai",
     "pyyaml",
+    "anndata",
+    "tifffile",
+    "scipy",
+    "scikit-image",
 ]
 
 [project.urls]
