@@ -15,6 +15,7 @@ import h5py
 from tifffile import TiffFile
 
 AUTOLOAD_SIZE_LIMIT = int(os.getenv("AIMINO_AUTLOAD_MAX_BYTES", "500000000"))  # 500MB default
+DISABLE_AUTOLOAD = os.getenv("AIMINO_DISABLE_AUTOLOAD", "0").strip() == "1"
 
 from aimino_frontend.aimino_core import CommandExecutionError, execute_command
 from aimino_frontend.aimino_core.data_store import (
@@ -295,13 +296,17 @@ class DataImportDock(QtWidgets.QWidget):
         marker = text.strip()
         if marker and get_current_dataset_id():
             set_marker(marker)
-            # auto-load on marker change
+            if DISABLE_AUTOLOAD:
+                self._append_status("[info] Autoload disabled (AIMINO_DISABLE_AUTOLOAD=1); click 'Show current marker layers' to load.")
+                return
             ds = get_current_dataset_id()
             base_cmd = {"dataset_id": ds, "marker_col": marker}
-            self._append_status("[auto] loading mask/density for current marker")
-            self._run_command({"action": "special_load_marker_data", **base_cmd})
-            self._run_command({"action": "special_show_mask", **base_cmd})
-            self._run_command({"action": "special_show_density", **base_cmd})
+            self._append_status("[auto] preparing mask/density for current marker")
+            try:
+                manifest = load_manifest(ds)
+            except Exception:
+                manifest = {}
+            self._safe_autoload(manifest, base_cmd)
         elif not marker:
             set_marker(None)
 
@@ -425,7 +430,7 @@ class DataImportDock(QtWidgets.QWidget):
         self._refresh_datasets(select=dataset_id)
         set_current_dataset(dataset_id, marker_col or None)
         # Auto-load mask/density if marker is provided
-        if marker_col:
+        if marker_col and not DISABLE_AUTOLOAD:
             base_cmd = {"dataset_id": dataset_id, "marker_col": marker_col}
             self._safe_autoload(manifest, base_cmd)
         self._refresh_datasets(select=dataset_id)
@@ -488,12 +493,12 @@ class DataImportDock(QtWidgets.QWidget):
             except Exception as exc:
                 self._append_status(f"[warning] Failed to read dataset '{ds}': {exc}")
             self._emit_selection(ds, marker)
-            if marker:
+            if marker and not DISABLE_AUTOLOAD:
                 base_cmd = {"dataset_id": ds, "marker_col": marker}
                 self._append_status("[auto] preparing mask/density for selected dataset")
                 self._safe_autoload(manifest_data, base_cmd)
             else:
-                self._append_status("[info] Type marker column to auto-show mask/density.")
+                self._append_status("[info] Autoload disabled or marker missing; use 'Show current marker layers' to load.")
         else:
             self._emit_selection(None)
 
