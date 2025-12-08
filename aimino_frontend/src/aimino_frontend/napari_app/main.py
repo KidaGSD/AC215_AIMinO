@@ -5,6 +5,7 @@
 from typing import Optional, List
 import asyncio
 import os
+import threading
 
 import napari
 import numpy as np
@@ -26,6 +27,7 @@ from aimino_frontend.aimino_core.data_store import (
     save_manifest,
     clear_processed_cache,
 )
+from aimino_frontend.aimino_core.handlers.context_handler import set_context_functions
 from .client_agent import AgentClient, load_last_session_id
 from .dataset_context import (
     get_context_payload,
@@ -34,6 +36,14 @@ from .dataset_context import (
     set_current_dataset,
     set_marker,
     update_from_command,
+)
+
+# Inject context functions into the handler
+set_context_functions(
+    set_dataset_fn=set_current_dataset,
+    set_marker_fn=set_marker,
+    get_dataset_id_fn=get_current_dataset_id,
+    get_marker_fn=get_current_marker,
 )
 
 
@@ -45,28 +55,63 @@ class CommandDock(QtWidgets.QWidget):
         self._last_session_id: str | None = load_last_session_id()
 
         layout = QtWidgets.QVBoxLayout()
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
         self.setLayout(layout)
 
-        self.dataset_label = QtWidgets.QLabel()
-        layout.addWidget(self.dataset_label)
-        self._refresh_dataset_label()
-
-        self.input = QtWidgets.QLineEdit()
-        self.input.setPlaceholderText("e.g. show nuclei layer, center on 200,300")
-        layout.addWidget(self.input)
-
-        self.run_btn = QtWidgets.QPushButton("Run Agent")
-        layout.addWidget(self.run_btn)
-
+        # Chat history area (main focus - like ChatGPT)
         self.output = QtWidgets.QPlainTextEdit()
         self.output.setReadOnly(True)
-        layout.addWidget(self.output)
+        self.output.setPlaceholderText(
+            "Welcome to AIMinO!\n\n"
+            "Try commands like:\n"
+            "  • list datasets\n"
+            "  • show SOX10 density\n"
+            "  • compute neighborhood for CD8\n"
+            "  • center on 500, 500"
+        )
+        layout.addWidget(self.output, stretch=1)  # Takes most space
 
-        # Optional checkbox to resume last conversation if available
-        self.restore_checkbox = QtWidgets.QCheckBox("Resume last conversation")
+        # Bottom section: context + input
+        bottom_section = QtWidgets.QVBoxLayout()
+        bottom_section.setSpacing(6)
+
+        # Dataset context label (compact bar)
+        self.dataset_label = QtWidgets.QLabel()
+        self.dataset_label.setStyleSheet(
+            "font-size: 11px; padding: 4px 8px; "
+            "background: #3a3a3a; border-radius: 4px; color: #aaa;"
+        )
+        bottom_section.addWidget(self.dataset_label)
+        self._refresh_dataset_label()
+
+        # Input row
+        input_layout = QtWidgets.QHBoxLayout()
+        input_layout.setSpacing(6)
+        self.input = QtWidgets.QLineEdit()
+        self.input.setPlaceholderText("Type a command...")
+        self.input.setStyleSheet(
+            "padding: 8px; border-radius: 4px; "
+            "background: #2a2a2a; border: 1px solid #444;"
+        )
+        self.run_btn = QtWidgets.QPushButton("Send")
+        self.run_btn.setFixedWidth(60)
+        self.run_btn.setStyleSheet(
+            "padding: 8px; border-radius: 4px; "
+            "background: #4a7c59; font-weight: bold;"
+        )
+        input_layout.addWidget(self.input, stretch=1)
+        input_layout.addWidget(self.run_btn)
+        bottom_section.addLayout(input_layout)
+
+        # Session checkbox (small, unobtrusive)
+        self.restore_checkbox = QtWidgets.QCheckBox("Resume last session")
+        self.restore_checkbox.setStyleSheet("font-size: 10px; color: #666;")
         if not self._last_session_id:
             self.restore_checkbox.setEnabled(False)
-        layout.addWidget(self.restore_checkbox)
+        bottom_section.addWidget(self.restore_checkbox)
+
+        layout.addLayout(bottom_section)
 
         self.run_btn.clicked.connect(self.on_submit)
         self.input.returnPressed.connect(self.on_submit)
@@ -74,6 +119,9 @@ class CommandDock(QtWidgets.QWidget):
 
     def log(self, text: str) -> None:
         self.output.appendPlainText(text)
+        # Auto-scroll to bottom (ChatGPT style)
+        scrollbar = self.output.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def _update_dataset_label(self) -> None:
         ds = get_current_dataset_id()
@@ -134,21 +182,76 @@ class CommandDock(QtWidgets.QWidget):
         self.input.clear()
         self.log(f"> {user_text}")
         metadata = get_context_payload()
-        try:
-            commands = asyncio.run(self.agent.invoke(user_text, metadata or None))
-        except Exception as exc:  # pragma: no cover - UI guard
-            self.log(f"[agent error] {exc}")
+
+        # Disable button while processing
+        self.run_btn.setEnabled(False)
+        self.run_btn.setText("...")
+
+        # Run agent in background thread to avoid UI freeze
+        def run_agent():
+            try:
+                commands = asyncio.run(self.agent.invoke(user_text, metadata or None))
+                # Use Qt signal to update UI from main thread
+                QtCore.QMetaObject.invokeMethod(
+                    self, "_handle_agent_response",
+                    QtCore.Qt.QueuedConnection,
+                    QtCore.Q_ARG(object, commands),
+                    QtCore.Q_ARG(object, None)
+                )
+            except Exception as exc:
+                QtCore.QMetaObject.invokeMethod(
+                    self, "_handle_agent_response",
+                    QtCore.Qt.QueuedConnection,
+                    QtCore.Q_ARG(object, None),
+                    QtCore.Q_ARG(object, exc)
+                )
+
+        thread = threading.Thread(target=run_agent, daemon=True)
+        thread.start()
+
+    @QtCore.Slot(object, object)
+    def _handle_agent_response(self, commands, error) -> None:
+        """Handle agent response in main thread."""
+        # Re-enable button
+        self.run_btn.setEnabled(True)
+        self.run_btn.setText("Send")
+
+        if error:
+            self.log(f"[agent error] {error}")
+            return
+
+        if not commands:
+            self.log("[info] No commands generated. Try rephrasing your request.")
             return
 
         for cmd in commands:
             try:
                 enriched = self._with_dataset_context(cmd)
+                action = enriched.get("action", "") if isinstance(enriched, dict) else ""
+
+                # Handle help action specially - show cleaner output
+                if action == "help":
+                    msg = execute_command(enriched, self.viewer)
+                    self.log(msg)  # Just show the help text, no command dump
+                    continue
+
+                # Check if dataset is required but missing
+                if action.startswith("special_") and not enriched.get("dataset_id"):
+                    self.log(
+                        "[info] No dataset selected.\n"
+                        "Please go to the 'Data' tab and:\n"
+                        "  1. Select an existing dataset, or\n"
+                        "  2. Import a new TIFF + h5ad pair"
+                    )
+                    continue
+
                 msg = execute_command(enriched, self.viewer)
-                self.log(f"command: {enriched} -> {msg}")
+                # Show cleaner output for successful commands
+                self.log(f"[{action}] {msg}")
                 update_from_command(enriched)
                 self._refresh_dataset_label()
             except CommandExecutionError as exc:
-                self.log(f"[execution error] {exc}")
+                self.log(f"[error] {exc}")
 
 
 class DataImportDock(QtWidgets.QWidget):
@@ -198,31 +301,37 @@ class DataImportDock(QtWidgets.QWidget):
         h5_row.addWidget(self.h5ad_browse)
         files_form.addRow("h5ad file", h5_row)
 
-        # Options & actions (kept minimal; auto-load is always on)
-        opts = QtWidgets.QGroupBox("Options")
-        opts_layout = QtWidgets.QVBoxLayout()
-        opts.setLayout(opts_layout)
-        self.layout().addWidget(opts)
+        # Actions
+        actions = QtWidgets.QGroupBox("Actions")
+        actions_layout = QtWidgets.QVBoxLayout()
+        actions.setLayout(actions_layout)
+        self.layout().addWidget(actions)
 
-        self.copy_checkbox = QtWidgets.QCheckBox("Copy files into AIMINO_DATA_ROOT")
-        self.copy_checkbox.setChecked(False)
-        self.remote_checkbox = QtWidgets.QCheckBox("Use backend register API (remote)")
-
-        opts_layout.addWidget(self.copy_checkbox)
-        opts_layout.addWidget(self.remote_checkbox)
-
-        actions_row = QtWidgets.QHBoxLayout()
-        self.ingest_btn = QtWidgets.QPushButton("Ingest / Register")
+        # Primary action: Register dataset
+        self.ingest_btn = QtWidgets.QPushButton("Register Dataset")
+        self.ingest_btn.setStyleSheet("padding: 8px; font-weight: bold;")
         self.ingest_btn.clicked.connect(self._ingest_dataset)
-        self.cache_cleanup_btn = QtWidgets.QPushButton("Clear processed cache")
-        self.cache_cleanup_btn.clicked.connect(self._cleanup_cache)
-        actions_row.addWidget(self.ingest_btn, 1)
-        actions_row.addWidget(self.cache_cleanup_btn, 1)
-        opts_layout.addLayout(actions_row)
+        actions_layout.addWidget(self.ingest_btn)
 
-        hl_btn = QtWidgets.QPushButton("Show current marker layers")
+        # Copy option (hidden by default, for advanced users)
+        self.copy_checkbox = QtWidgets.QCheckBox("Copy files (instead of link)")
+        self.copy_checkbox.setChecked(False)
+        self.copy_checkbox.setStyleSheet("font-size: 11px; color: #888;")
+        actions_layout.addWidget(self.copy_checkbox)
+
+        # Hidden - not needed in current architecture
+        self.remote_checkbox = QtWidgets.QCheckBox()
+        self.remote_checkbox.setVisible(False)
+
+        # Secondary actions
+        secondary_row = QtWidgets.QHBoxLayout()
+        hl_btn = QtWidgets.QPushButton("Load Marker Layers")
         hl_btn.clicked.connect(self._highlight_layers)
-        opts_layout.addWidget(hl_btn)
+        self.cache_cleanup_btn = QtWidgets.QPushButton("Clear Cache")
+        self.cache_cleanup_btn.clicked.connect(self._cleanup_cache)
+        secondary_row.addWidget(hl_btn, 1)
+        secondary_row.addWidget(self.cache_cleanup_btn, 1)
+        actions_layout.addLayout(secondary_row)
 
         # Existing datasets
         existing = QtWidgets.QGroupBox("Existing datasets")
@@ -541,35 +650,74 @@ class DataImportDock(QtWidgets.QWidget):
         self._run_command({"action": "special_show_density", **base_cmd})
 
 
-def get_dock_widget(viewer: napari.Viewer) -> CommandDock:
-    """Create and return the AIMinO command dock widget.
-    
+class AIMinOMainDock(QtWidgets.QWidget):
+    """Main AIMinO dock with tabbed interface for Chat and Data Import."""
+
+    def __init__(self, viewer: napari.Viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+        self.agent = AgentClient()
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+        # Create tabbed interface
+        self.tabs = QtWidgets.QTabWidget()
+        layout.addWidget(self.tabs)
+
+        # Tab 1: Chat (primary)
+        self.chat_tab = CommandDock(viewer, self.agent)
+        self.tabs.addTab(self.chat_tab, "Chat")
+
+        # Tab 2: Data Import
+        self.data_tab = DataImportDock(viewer, self.agent)
+        self.data_tab.dataset_changed.connect(self.chat_tab.set_current_dataset)
+        self.tabs.addTab(self.data_tab, "Data")
+
+        # Set Chat as default tab
+        self.tabs.setCurrentIndex(0)
+
+        # Style tabs
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid #3a3a3a; }
+            QTabBar::tab {
+                padding: 8px 16px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background: #3a3a3a;
+                font-weight: bold;
+            }
+        """)
+
+
+def get_dock_widget(viewer: napari.Viewer) -> AIMinOMainDock:
+    """Create and return the AIMinO main dock widget.
+
     This function is used by the Napari plugin system to create the dock widget.
     """
-    agent = AgentClient()
-    dock = CommandDock(viewer, agent)
-    return dock
+    return AIMinOMainDock(viewer)
 
 
 def open_chatbox(viewer: napari.Viewer = None):
-    """Open the AIMinO ChatBox dock widget.
-    
+    """Open the AIMinO dock widget.
+
     This is the entry point for the Napari plugin menu.
     Returns the widget so it can be used by Napari's widget system.
     """
     import logging
     import napari
-    
+
     logger = logging.getLogger("aimino_debug")
     logger.setLevel(logging.INFO)
-    # Add handler if not present
     if not logger.handlers:
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
         logger.addHandler(ch)
 
     logger.info(f"DEBUG: open_chatbox called. viewer={viewer}")
-    
+
     if viewer is None:
         logger.warning("DEBUG: viewer is None, attempting fallback to current_viewer()")
         try:
@@ -577,22 +725,18 @@ def open_chatbox(viewer: napari.Viewer = None):
             logger.info(f"DEBUG: Retrieved current_viewer: {viewer}")
         except Exception as e:
             logger.error(f"DEBUG: Failed to get current_viewer: {e}")
-            
+
     if viewer is None:
         logger.error("DEBUG: Viewer is still None. Cannot create dock widget.")
         return None
 
-    command_dock = get_dock_widget(viewer)
-    # Share same agent with data dock for remote register support
-    data_dock = DataImportDock(viewer, command_dock.agent)
-    data_dock.dataset_changed.connect(command_dock.set_current_dataset)
-    viewer.window.add_dock_widget(data_dock, name="AIMinO Data Import", area="right")
-    return command_dock
+    # Return single unified dock widget
+    return get_dock_widget(viewer)
 
 
 def launch() -> None:
     """Launch Napari with AIMinO agent (standalone mode).
-    
+
     This creates a new viewer and adds sample data.
     """
     viewer = napari.Viewer()
@@ -602,7 +746,7 @@ def launch() -> None:
     viewer.add_image(img * 0.1, name="cells", visible=False)
 
     dock = open_chatbox(viewer)
-    viewer.window.add_dock_widget(dock, name="AIMinO ChatBox", area="right")
+    viewer.window.add_dock_widget(dock, name="AIMinO", area="right")
     napari.run()
 
 

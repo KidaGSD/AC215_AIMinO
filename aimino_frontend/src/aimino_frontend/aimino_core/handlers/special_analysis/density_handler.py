@@ -29,7 +29,9 @@ def handle_show_density(command: CmdShowDensity, viewer: "Viewer") -> str:
     ly = find_layer(viewer, lname)
     if not ly:
         raise CommandExecutionError(
-            f"Density layer '{lname}' not found. Please load marker data first."
+            f"Density layer '{lname}' not found.\n"
+            f"The data may not be loaded yet (large images are skipped by default).\n"
+            f"Go to 'Data' tab and click 'Show current marker layers' to load."
         )
     
     ly.visible = True

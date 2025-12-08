@@ -42,6 +42,7 @@ def get_workers() -> Dict[str, LlmAgent]:
         "data_ingest": _build_worker("DataIngestWorker", "data_ingest_worker.md"),
         "mask_density": _build_worker("MaskDensityWorker", "mask_density_worker.md"),
         "neighborhood": _build_worker("NeighborhoodWorker", "neighborhood_worker.md"),
+        "context": _build_worker("ContextWorker", "context_worker.md"),
     }
 
 

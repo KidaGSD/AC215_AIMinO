@@ -32,6 +32,15 @@ REQUIRED_DATASET_ACTIONS = {
     "special_compute_neighborhood",
 }
 
+# Actions that don't require dataset_id (can use current context or none)
+CONTEXT_ACTIONS = {
+    "set_dataset",
+    "set_marker",
+    "list_datasets",
+    "get_dataset_info",
+    "clear_processed_cache",
+}
+
 
 class _ContextInfo:
     def __init__(self) -> None:
@@ -111,15 +120,26 @@ def _autofill_command(
         return command, None
     updated = dict(command)
 
-    # dataset_id handling
+    # Context actions don't require dataset_id (they manage context themselves)
+    if action in CONTEXT_ACTIONS:
+        # For get_dataset_info and clear_processed_cache, optionally fill dataset_id
+        if action in {"get_dataset_info", "clear_processed_cache"} and not updated.get("dataset_id"):
+            dataset = _pick_candidate(ctx_info.last_dataset, ctx_info.dataset_candidates)
+            if dataset:
+                updated["dataset_id"] = dataset
+            # OK if missing - these commands can work without dataset_id
+        return updated, None
+
+    # dataset_id handling for other actions
     if action in REQUIRED_DATASET_ACTIONS and not updated.get("dataset_id"):
         dataset = _pick_candidate(ctx_info.last_dataset, ctx_info.dataset_candidates)
         if dataset:
             updated["dataset_id"] = dataset
         else:
             if ctx_info.dataset_candidates:
-                return None, "检测到多个数据集，请在命令中明确 `dataset_id`。"
-            return None, "请先导入或选择数据集，然后再执行该操作。"
+                candidates_str = ", ".join(sorted(ctx_info.dataset_candidates)[:5])
+                return None, f"Multiple datasets detected ({candidates_str}). Please specify `dataset_id` in your command."
+            return None, "No dataset selected. Please import or select a dataset first using 'set_dataset' or 'data_ingest'."
 
     # marker handling
     if action in {
@@ -133,7 +153,10 @@ def _autofill_command(
         if marker:
             updated["marker_col"] = marker
         else:
-            return None, "请指定 marker 列（例如 SOX10_positive）。"
+            if ctx_info.marker_candidates:
+                markers_str = ", ".join(sorted(ctx_info.marker_candidates)[:5])
+                return None, f"Multiple markers available ({markers_str}). Please specify `marker_col` in your command."
+            return None, "No marker selected. Please specify a marker column (e.g., 'SOX10_positive') or use 'set_marker'."
 
     # sigma / radius fallback
     if action == "special_update_density" and updated.get("sigma") is None and ctx_info.last_sigma is not None:

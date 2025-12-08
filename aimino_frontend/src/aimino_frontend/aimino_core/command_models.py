@@ -697,6 +697,32 @@ class CmdComputeNeighborhood(BaseModel):
     force_recompute: bool = False
 
 
+# Context management commands
+class CmdSetDataset(BaseModel):
+    action: Literal["set_dataset"]
+    dataset_id: str
+
+
+class CmdSetMarker(BaseModel):
+    action: Literal["set_marker"]
+    marker_col: str
+
+
+class CmdListDatasets(BaseModel):
+    action: Literal["list_datasets"]
+
+
+class CmdGetDatasetInfo(BaseModel):
+    action: Literal["get_dataset_info"]
+    dataset_id: Optional[str] = None
+
+
+class CmdClearCache(BaseModel):
+    action: Literal["clear_processed_cache"]
+    dataset_id: Optional[str] = None
+    delete_raw: bool = False
+
+
 BaseNapariCommand = Union[
     CmdLayerVisibility,
     CmdPanelToggle,
@@ -818,6 +844,11 @@ BaseNapariCommand = Union[
     CmdShowDensity,
     CmdUpdateDensity,
     CmdComputeNeighborhood,
+    CmdSetDataset,
+    CmdSetMarker,
+    CmdListDatasets,
+    CmdGetDatasetInfo,
+    CmdClearCache,
 ]
 
 BaseCommandAdapter = TypeAdapter(BaseNapariCommand)
@@ -946,4 +977,9 @@ __all__ = [
     "CmdShowDensity",
     "CmdUpdateDensity",
     "CmdComputeNeighborhood",
+    "CmdSetDataset",
+    "CmdSetMarker",
+    "CmdListDatasets",
+    "CmdGetDatasetInfo",
+    "CmdClearCache",
 ]

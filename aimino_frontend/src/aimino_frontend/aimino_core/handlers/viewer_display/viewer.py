@@ -212,14 +212,20 @@ def handle_zoom_box(command: CmdZoomBox, viewer: "Viewer") -> str:
 @register_handler("help")
 def handle_help(command: CmdHelp, viewer: "Viewer") -> str:  # noqa: ARG001
     return (
-        "Examples:\n"
-        "- show nuclei layer\n"
-        "- hide layer cells\n"
-        "- center on 250, 300\n"
-        "- zoom box 0,0,512,512\n"
-        "- set zoom 1.5\n"
-        "- fit to layer nuclei\n"
-        "- list layers\n"
+        "I didn't understand that command. Try:\n\n"
+        "Analysis:\n"
+        "  - show SOX10 density\n"
+        "  - load marker CD8_positive\n"
+        "  - compute neighborhood for SOX10\n"
+        "  - update density sigma 300\n\n"
+        "Context:\n"
+        "  - list datasets\n"
+        "  - switch to dataset case123\n"
+        "  - set marker SOX10_positive\n\n"
+        "Viewer:\n"
+        "  - show/hide layer [name]\n"
+        "  - center on 250, 300\n"
+        "  - fit to layer nuclei\n"
     )
 
 

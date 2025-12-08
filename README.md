@@ -2,6 +2,32 @@
 
 AIMinO is an intelligent image analysis plugin for Napari that enables natural language command control of the Napari viewer.
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Server (K8s/Docker)                       │
+│  /api/v1/invoke → LeadManager → Workers → Command JSON      │
+│                                                              │
+│  - Parses user intent using Gemini LLM                      │
+│  - Generates executable commands                             │
+│  - Does NOT access data or execute computations              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+                    Returns: [{"action": "special_show_density", ...}]
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Napari Client (Local)                     │
+│  handlers/special_analysis/ → Execute commands              │
+│                                                              │
+│  - Accesses local TIFF/h5ad files                           │
+│  - Executes all computations (density, mask, neighborhood)  │
+│  - Updates Napari viewer with results                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key insight**: Server agents only generate commands; all data access and computation happens on the Napari client locally.
+
 ## Quick Start
 
 ### System Requirements
@@ -65,16 +91,40 @@ napari
 
 ---
 
+## Supported Commands
+
+### Context Management
+- `set_dataset` - Switch active dataset context
+- `set_marker` - Switch active marker column
+- `list_datasets` - Show available datasets
+- `get_dataset_info` - Show current dataset details
+- `clear_processed_cache` - Free disk space
+
+### Analysis Commands
+- `special_load_marker_data` - Load TIFF + h5ad pair
+- `special_show_mask` - Display binary mask for marker
+- `special_show_density` - Show density heatmap
+- `special_update_density` - Recompute density with parameters (sigma, colormap)
+- `special_compute_neighborhood` - Tumor microenvironment analysis
+
+### Viewer Commands
+- Layer visibility (show/hide/toggle)
+- Camera control (zoom, center, angles)
+- Screenshot and export
+
 ## Recent Updates (Data & UI)
+- **Context commands**: Added `set_dataset`, `set_marker`, `list_datasets`, `get_dataset_info`, `clear_processed_cache` for session management.
+- **Improved LeadManager**: Better error messages when dataset_id or marker is missing; shows available options.
+- **Updated handbooks**: All workers now document `force_recompute`, `sigma`, `radius` parameters with defaults.
 - Added `DataStore`-based ingest with manifest (auto dataset_id, link-by-default, hash/mtime checks).
 - Napari Data Import Dock auto-detects marker columns from h5ad (bool / `*_positive`) and saves to manifest; will auto-load mask/density when safe.
 - Added safety guard for large data: auto-load is skipped if file size exceeds `AIMINO_AUTLOAD_MAX_BYTES` (default 500MB) or image dimensions exceed 16k; status panel shows guidance.
-- “Show current marker layers” now reuses the same guard; it warns before forcing a large load.
+- "Show current marker layers" now reuses the same guard; it warns before forcing a large load.
 - New cache cleanup and marker-layer highlight buttons; remote register option uses `/api/v1/datasets/register`.
-- Added `AIMINO_DISABLE_AUTOLOAD=1` toggle: disables all auto-load paths (dataset selection, marker change, ingest). Use “Show current marker layers” to load manually.
-- Agent/Backend updates: added data_ingest/mask_density/neighborhood workers and validation in LeadManager; `/api/v1/datasets/register` endpoint; handbooks/task_parser updated.
+- Added `AIMINO_DISABLE_AUTOLOAD=1` toggle: disables all auto-load paths (dataset selection, marker change, ingest). Use "Show current marker layers" to load manually.
+- Agent/Backend updates: added data_ingest/mask_density/neighborhood/context workers and validation in LeadManager; `/api/v1/datasets/register` endpoint; handbooks/task_parser updated.
 - Core handlers now resolve via DataStore; command models include dataset_id/sigma/radius/force options.
-- Tests: added `tests/test_data_store.py` and a headless `tests/test_pipeline_e2e.py`.
+- Tests: added `tests/test_data_store.py`, `tests/test_pipeline_e2e.py`, and `tests/test_context_commands.py`.
 
 ## Known Issues & Mitigations
 - **Large images (>16k pixels per axis)**: Napari/VisPy will downsample and may freeze. Use a downsampled/pyramidal copy (OME-Zarr or pyramidal OME-TIFF) for visualization; point `manifest.json` `image_path` to the multiscale asset.

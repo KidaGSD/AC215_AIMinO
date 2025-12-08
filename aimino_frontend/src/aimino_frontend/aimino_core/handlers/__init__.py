@@ -23,6 +23,7 @@ DEFAULT_HANDLER_MODULES = [
     ".special_analysis.mask_handler",
     ".special_analysis.density_handler",
     ".special_analysis.neighborhood_handler",
+    ".context_handler",
 ]
 
 _loaded = False
