@@ -21,7 +21,6 @@ pip install aimino
 
 ```bash
 # Create .env file in project root
-cd AC215_AIMinO
 cp .env.example .env
 
 # Edit .env and add your Google Gemini API Key
