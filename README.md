@@ -15,6 +15,7 @@ AIMinO is an intelligent image analysis plugin for Napari that enables natural l
 ```bash
 # Install from PyPI 
 pip install aimino
+```
 
 
 ### 2. Configure Backend
