@@ -2,7 +2,7 @@
 
 AIMinO is an intelligent image analysis plugin for Napari that enables natural language command control of the Napari viewer.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### System Requirements
 
@@ -13,7 +13,7 @@ AIMinO is an intelligent image analysis plugin for Napari that enables natural l
 ### 1. Install Frontend Plugin
 
 ```bash
-# Install from PyPI (recommended)
+# Install from PyPI 
 pip install aimino
 
 
@@ -28,10 +28,6 @@ cp .env.example .env
 # GEMINI_API_KEY=your_api_key_here
 ```
 
-**Get API Key**:
-1. Visit https://ai.google.dev/ to create an API key
-2. Enable "Generative Language API" in Google Cloud Console
-3. Set up billing account (may be required even for free tier)
 
 ### 3. Start Backend Service
 
@@ -52,36 +48,7 @@ napari
 # In Napari menu: Plugins → AIMinO ChatBox
 ```
 
-### Usage Examples
 
-Enter commands in the ChatBox:
-- `show layers` - Display all layers
-- `zoom in` / `zoom out` - Zoom view
-- `center on 200,300` - Center on specified coordinates
-
-### Common Issues
-
-**Backend Connection Failed**
-```bash
-docker ps | grep aimino-api  # Check if container is running
-docker logs aimino-api       # View logs
-```
-
-**API Quota Error**
-- Check if API key is correct
-- Ensure "Generative Language API" is enabled
-- Set up billing account
-
-**Plugin Not Showing**
-- Ensure plugin is installed in the same Python environment as Napari
-- Fully restart Napari
-- Check: `pip list | grep aimino`
-
-### Stop Services
-
-```bash
-docker stop aimino-api
-```
 
 ---
 
