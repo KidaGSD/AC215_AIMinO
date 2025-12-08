@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import anndata as ad
 
 from ...command_models import CmdShowDensity, CmdUpdateDensity
+from ...data_store import resolve_dataset_context
 from ...errors import CommandExecutionError
 from ...registry import register_handler
 from .utils import (
@@ -19,11 +20,6 @@ from ..layer_management.layer_list import find_layer
 
 if TYPE_CHECKING:
     from napari.viewer import Viewer
-
-
-def _get_default_output_root() -> str:
-    """Get default output root directory."""
-    return os.path.expanduser("~/Desktop/AC215/Milestone2/processed")
 
 
 @register_handler("special_show_density")
@@ -45,24 +41,30 @@ def handle_show_density(command: CmdShowDensity, viewer: "Viewer") -> str:
 @register_handler("special_update_density")
 def handle_update_density(command: CmdUpdateDensity, viewer: "Viewer") -> str:
     """Update density layer with new parameters."""
-    output_root = command.output_root or _get_default_output_root()
-    
-    if not os.path.exists(command.image_path):
-        raise CommandExecutionError(f"Image file not found: {command.image_path}")
-    if not os.path.exists(command.h5ad_path):
-        raise CommandExecutionError(f"H5AD file not found: {command.h5ad_path}")
-    
+    try:
+        ctx = resolve_dataset_context(
+            command.dataset_id,
+            command.image_path,
+            command.h5ad_path,
+            command.output_root,
+        )
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        raise CommandExecutionError(str(exc)) from exc
+
     sigma = float(command.sigma) if command.sigma is not None else 200.0
     cmap = command.colormap or "magma"
     force = bool(command.force)
+    image_path = str(ctx.image_path)
+    h5ad_path = str(ctx.h5ad_path)
+    output_root = str(ctx.output_root)
     
     try:
-        adata = ad.read_h5ad(command.h5ad_path)
+        adata = ad.read_h5ad(h5ad_path)
         obs = adata.obs.copy()
         
         density, lname = _ensure_density_layer(
             viewer,
-            command.image_path,
+            image_path,
             obs,
             command.marker_col,
             output_root,
@@ -80,7 +82,7 @@ def handle_update_density(command: CmdUpdateDensity, viewer: "Viewer") -> str:
             viewer.layers.remove(b_layer)
         
         _, _, _, _, bnd_npz = get_output_paths(
-            command.image_path, command.marker_col, output_root, sigma
+            image_path, command.marker_col, output_root, sigma
         )
         paths = []
         if (not force) and os.path.exists(bnd_npz):
@@ -115,4 +117,3 @@ __all__ = [
     "handle_show_density",
     "handle_update_density",
 ]
-

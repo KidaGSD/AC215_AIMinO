@@ -1,9 +1,9 @@
 """Mask-related command handlers."""
 
-import os
 from typing import TYPE_CHECKING
 
 from ...command_models import CmdLoadMarkerData, CmdShowMask
+from ...data_store import resolve_dataset_context
 from ...errors import CommandExecutionError
 from ...registry import register_handler
 from .utils import (
@@ -17,31 +17,29 @@ if TYPE_CHECKING:
     from napari.viewer import Viewer
 
 
-def _get_default_output_root() -> str:
-    """Get default output root directory."""
-    return os.path.expanduser("~/Desktop/AC215/Milestone2/processed")
-
-
 @register_handler("special_load_marker_data")
 def handle_load_marker_data(command: CmdLoadMarkerData, viewer: "Viewer") -> str:
     """Load marker data from TIFF and h5ad files."""
-    output_root = command.output_root or _get_default_output_root()
-    
-    if not os.path.exists(command.image_path):
-        raise CommandExecutionError(f"Image file not found: {command.image_path}")
-    if not os.path.exists(command.h5ad_path):
-        raise CommandExecutionError(f"H5AD file not found: {command.h5ad_path}")
-    
+    try:
+        ctx = resolve_dataset_context(
+            command.dataset_id,
+            command.image_path,
+            command.h5ad_path,
+            command.output_root,
+        )
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        raise CommandExecutionError(str(exc)) from exc
+
     try:
         add_marker_mask_from_h5ad(
             viewer,
-            command.image_path,
-            command.h5ad_path,
+            str(ctx.image_path),
+            str(ctx.h5ad_path),
             command.marker_col,
-            output_root,
+            str(ctx.output_root),
             force_recompute=command.force_recompute,
         )
-        return f"Loaded marker data for {command.marker_col} from {os.path.basename(command.h5ad_path)}"
+        return f"Loaded marker data for {command.marker_col} from {ctx.h5ad_path.name}"
     except Exception as e:
         raise CommandExecutionError(f"Failed to load marker data: {e}") from e
 
@@ -74,4 +72,3 @@ __all__ = [
     "handle_load_marker_data",
     "handle_show_mask",
 ]
-

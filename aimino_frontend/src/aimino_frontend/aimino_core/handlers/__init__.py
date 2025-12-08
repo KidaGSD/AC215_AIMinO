@@ -19,6 +19,7 @@ DEFAULT_HANDLER_MODULES = [
     ".layer_visualization.points_layer",
     ".layer_visualization.shapes_layer",
     ".layer_visualization.labels_layer",
+    ".special_analysis.data_ingest_handler",
     ".special_analysis.mask_handler",
     ".special_analysis.density_handler",
     ".special_analysis.neighborhood_handler",

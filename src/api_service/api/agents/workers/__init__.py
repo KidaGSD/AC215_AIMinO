@@ -39,8 +39,10 @@ def get_workers() -> Dict[str, LlmAgent]:
     return {
         "layer_panel": _build_worker("LayerPanelWorker", "layer_panel_worker.md"),
         "view_zoom": _build_worker("ViewZoomWorker", "view_zoom_worker.md"),
+        "data_ingest": _build_worker("DataIngestWorker", "data_ingest_worker.md"),
+        "mask_density": _build_worker("MaskDensityWorker", "mask_density_worker.md"),
+        "neighborhood": _build_worker("NeighborhoodWorker", "neighborhood_worker.md"),
     }
 
 
 __all__ = ["get_workers", "WorkerInput"]
-

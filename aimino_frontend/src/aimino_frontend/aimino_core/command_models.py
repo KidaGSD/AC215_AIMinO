@@ -644,11 +644,21 @@ class CmdLabelsMode(BaseModel):
 
 
 # Special analysis commands for biological image processing
-class CmdLoadMarkerData(BaseModel):
-    action: Literal["special_load_marker_data"]
+class CmdDataIngest(BaseModel):
+    action: Literal["data_ingest"]
+    dataset_id: str
     image_path: str
     h5ad_path: str
+    copy_files: bool = False
+    marker_col: Optional[str] = None
+
+
+class CmdLoadMarkerData(BaseModel):
+    action: Literal["special_load_marker_data"]
     marker_col: str
+    dataset_id: Optional[str] = None
+    image_path: Optional[str] = None
+    h5ad_path: Optional[str] = None
     output_root: Optional[str] = None
     force_recompute: bool = False
 
@@ -667,8 +677,9 @@ class CmdShowDensity(BaseModel):
 class CmdUpdateDensity(BaseModel):
     action: Literal["special_update_density"]
     marker_col: str
-    image_path: str
-    h5ad_path: str
+    dataset_id: Optional[str] = None
+    image_path: Optional[str] = None
+    h5ad_path: Optional[str] = None
     output_root: Optional[str] = None
     sigma: Optional[Float] = None
     colormap: Optional[str] = None
@@ -678,8 +689,9 @@ class CmdUpdateDensity(BaseModel):
 class CmdComputeNeighborhood(BaseModel):
     action: Literal["special_compute_neighborhood"]
     marker_col: str
-    image_path: str
-    h5ad_path: str
+    dataset_id: Optional[str] = None
+    image_path: Optional[str] = None
+    h5ad_path: Optional[str] = None
     output_root: Optional[str] = None
     radius: Optional[Float] = None
     force_recompute: bool = False
@@ -800,6 +812,7 @@ BaseNapariCommand = Union[
     CmdLabelsIsoGradientMode,
     CmdLabelsSelectedLabel,
     CmdLabelsMode,
+    CmdDataIngest,
     CmdLoadMarkerData,
     CmdShowMask,
     CmdShowDensity,
@@ -927,6 +940,7 @@ __all__ = [
     "CmdLabelsIsoGradientMode",
     "CmdLabelsSelectedLabel",
     "CmdLabelsMode",
+    "CmdDataIngest",
     "CmdLoadMarkerData",
     "CmdShowMask",
     "CmdShowDensity",

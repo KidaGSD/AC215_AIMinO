@@ -10,6 +10,7 @@ from .utils.agents_bootstrap import build_runner
 from .utils.logging import configure_logging
 from .routers.invoke import router as invoke_router
 from .routers.healthz import router as healthz_router
+from .routers.datasets import router as datasets_router
 import os
 try:
     import google.genai as genai
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
 
     app.include_router(invoke_router, prefix=settings.AIMINO_API_PREFIX)
     app.include_router(healthz_router, prefix=settings.AIMINO_API_PREFIX)
+    app.include_router(datasets_router, prefix=settings.AIMINO_API_PREFIX)
     return app
 
 

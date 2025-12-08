@@ -135,6 +135,7 @@ class HttpTransport:
         self.timeout_s = timeout_s
         self.retries = retries
         self._session_id: str | None = None
+        self._token: str | None = None
 
     async def healthz(self) -> dict:
         url = f"{self.base_url}/api/v1/healthz"
@@ -173,6 +174,35 @@ class HttpTransport:
                 last_err = e
         # after retries exhausted
         raise RuntimeError(f"HTTP invoke failed (check /healthz and server logs): {last_err}")
+
+    async def register_dataset(
+        self,
+        image_path: str,
+        h5ad_path: str,
+        dataset_id: Optional[str] = None,
+        copy_files: bool = False,
+        marker_col: Optional[str] = None,
+    ) -> dict:
+        url = f"{self.base_url}/api/v1/datasets/register"
+        payload = {
+            "image_path": image_path,
+            "h5ad_path": h5ad_path,
+            "dataset_id": dataset_id,
+            "copy_files": copy_files,
+        }
+        if marker_col:
+            payload["marker_col"] = marker_col
+
+        last_err: Exception | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+                    resp = await client.post(url, json=payload)
+                    resp.raise_for_status()
+                    return resp.json()
+            except Exception as e:
+                last_err = e
+        raise RuntimeError(f"Dataset register failed: {last_err}")
 
     def set_session_id(self, session_id: Optional[str]) -> None:
         self._session_id = session_id
@@ -217,17 +247,20 @@ class AgentClient:
         self._context_buffer: deque[dict] = deque(maxlen=20)
         self.transport: BaseTransport = HttpTransport(server_url)
 
-    async def invoke(self, user_input: str) -> List[dict]:
+    async def invoke(self, user_input: str, extra_context: Optional[dict] = None) -> List[dict]:
         # attach last-N context
         context = list(self._context_buffer)
+        if extra_context:
+            context.append({"type": "dataset_context", **extra_context})
         commands = await self.transport.invoke(user_input, context=context)
         # log entry
-        self._append_client_log(user_input, commands)
+        self._append_client_log(user_input, commands, extra_context)
         # update context buffer (simple record)
         self._context_buffer.append({
             "ts": datetime.utcnow().isoformat() + "Z",
             "user_input": user_input,
             "commands_count": len(commands),
+            "context": extra_context,
         })
         return commands
 
@@ -243,7 +276,7 @@ class AgentClient:
             return getter()
         return None
 
-    def _append_client_log(self, user_input: str, commands: List[dict]) -> None:
+    def _append_client_log(self, user_input: str, commands: List[dict], extra_context: Optional[dict] = None) -> None:
         try:
             date = datetime.utcnow().strftime("%Y%m%d")
             path = pathlib.Path("logs/client/") / f"client_{date}.jsonl"
@@ -253,6 +286,8 @@ class AgentClient:
                 "user_input": user_input,
                 "final_commands": commands,
             }
+            if extra_context:
+                rec["context"] = extra_context
             with open(path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         except Exception:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator, Dict, List
+from typing import Any, AsyncGenerator, Dict, List, Optional, Set
 
 from google.adk.agents import BaseAgent, LlmAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -21,8 +21,127 @@ from .workers import get_workers
 from .handbooks import load_text
 
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-pro"
 SUPPORTED_ACTIONS = set(available_actions())
+REQUIRED_DATASET_ACTIONS = {
+    "data_ingest",
+    "special_load_marker_data",
+    "special_show_mask",
+    "special_show_density",
+    "special_update_density",
+    "special_compute_neighborhood",
+}
+
+
+class _ContextInfo:
+    def __init__(self) -> None:
+        self.dataset_candidates: Set[str] = set()
+        self.marker_candidates: Set[str] = set()
+        self.last_dataset: Optional[str] = None
+        self.last_marker: Optional[str] = None
+        self.last_sigma: Optional[float] = None
+        self.last_radius: Optional[float] = None
+
+    def register_dataset(self, value: Optional[str]) -> None:
+        if not value:
+            return
+        self.dataset_candidates.add(value)
+        if self.last_dataset is None:
+            self.last_dataset = value
+
+    def register_marker(self, value: Optional[str]) -> None:
+        if not value:
+            return
+        self.marker_candidates.add(value)
+        if self.last_marker is None:
+            self.last_marker = value
+
+
+def _extract_context_info(state: Any) -> _ContextInfo:
+    info = _ContextInfo()
+    if not isinstance(state, dict):
+        return info
+
+    ctx_entries = state.get("context")
+    if isinstance(ctx_entries, list):
+        for entry in reversed(ctx_entries):
+            if not isinstance(entry, dict):
+                continue
+            info.register_dataset(entry.get("dataset_id"))
+            info.register_marker(entry.get("marker_col") or entry.get("marker"))
+            if info.last_sigma is None and entry.get("sigma") is not None:
+                info.last_sigma = float(entry["sigma"])
+            if info.last_radius is None and entry.get("radius") is not None:
+                info.last_radius = float(entry["radius"])
+
+    history = state.get("history")
+    if isinstance(history, list):
+        for turn in reversed(history):
+            commands = turn.get("final_commands")
+            if not isinstance(commands, list):
+                continue
+            for cmd in reversed(commands):
+                if not isinstance(cmd, dict):
+                    continue
+                info.register_dataset(cmd.get("dataset_id"))
+                info.register_marker(cmd.get("marker_col"))
+                if info.last_sigma is None and cmd.get("sigma") is not None:
+                    info.last_sigma = float(cmd["sigma"])
+                if info.last_radius is None and cmd.get("radius") is not None:
+                    info.last_radius = float(cmd["radius"])
+            if info.last_dataset and info.last_marker and info.last_sigma is not None and info.last_radius is not None:
+                break
+    return info
+
+
+def _pick_candidate(last_value: Optional[str], candidates: Set[str]) -> Optional[str]:
+    if last_value:
+        return last_value
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    return None
+
+
+def _autofill_command(
+    command: dict,
+    ctx_info: _ContextInfo,
+) -> tuple[Optional[dict], Optional[str]]:
+    action = command.get("action")
+    if not isinstance(action, str):
+        return command, None
+    updated = dict(command)
+
+    # dataset_id handling
+    if action in REQUIRED_DATASET_ACTIONS and not updated.get("dataset_id"):
+        dataset = _pick_candidate(ctx_info.last_dataset, ctx_info.dataset_candidates)
+        if dataset:
+            updated["dataset_id"] = dataset
+        else:
+            if ctx_info.dataset_candidates:
+                return None, "检测到多个数据集，请在命令中明确 `dataset_id`。"
+            return None, "请先导入或选择数据集，然后再执行该操作。"
+
+    # marker handling
+    if action in {
+        "special_load_marker_data",
+        "special_show_mask",
+        "special_show_density",
+        "special_update_density",
+        "special_compute_neighborhood",
+    } and not updated.get("marker_col"):
+        marker = _pick_candidate(ctx_info.last_marker, ctx_info.marker_candidates)
+        if marker:
+            updated["marker_col"] = marker
+        else:
+            return None, "请指定 marker 列（例如 SOX10_positive）。"
+
+    # sigma / radius fallback
+    if action == "special_update_density" and updated.get("sigma") is None and ctx_info.last_sigma is not None:
+        updated["sigma"] = ctx_info.last_sigma
+    if action == "special_compute_neighborhood" and updated.get("radius") is None and ctx_info.last_radius is not None:
+        updated["radius"] = ctx_info.last_radius
+
+    return updated, None
 
 
 class TaskParserInput(BaseModel):
@@ -105,6 +224,7 @@ class NapariLeadManager(BaseAgent):
             return
 
         commands: List[dict] = []
+        ctx_info = _extract_context_info(ctx.session.state)
         for description, worker_type in tasks:
             worker = self.workers.get(worker_type)
             if worker is None:
@@ -121,6 +241,17 @@ class NapariLeadManager(BaseAgent):
             raw_cmd = ctx.session.state.get("command_json", "")
             try:
                 command = _extract_json(raw_cmd)
+                if not isinstance(command, dict):
+                    raise ValidationError("command_json missing", BaseModel)
+                command, autofill_error = _autofill_command(command, ctx_info)
+                if autofill_error:
+                    yield Event(
+                        author=self.name,
+                        content=types.Content(parts=[types.Part(text=autofill_error)]),
+                    )
+                    continue
+                if command is None:
+                    continue
                 model = BaseCommandAdapter.validate_python(command)
                 if model.action not in SUPPORTED_ACTIONS:
                     yield Event(
@@ -128,7 +259,15 @@ class NapariLeadManager(BaseAgent):
                         content=types.Content(parts=[types.Part(text=f"Unsupported action: {model.action}")]),
                     )
                     continue
-                commands.append(model.model_dump())
+                normalized = model.model_dump()
+                commands.append(normalized)
+                # update context cache with latest values for downstream tasks
+                ctx_info.register_dataset(normalized.get("dataset_id"))
+                ctx_info.register_marker(normalized.get("marker_col"))
+                if normalized.get("sigma") is not None:
+                    ctx_info.last_sigma = float(normalized["sigma"])
+                if normalized.get("radius") is not None:
+                    ctx_info.last_radius = float(normalized["radius"])
             except ValidationError as exc:
                 yield Event(
                     author=worker.name,
