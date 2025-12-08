@@ -17,6 +17,7 @@ from tifffile import TiffFile
 
 AUTOLOAD_SIZE_LIMIT = int(os.getenv("AIMINO_AUTLOAD_MAX_BYTES", "500000000"))  # 500MB default
 DISABLE_AUTOLOAD = os.getenv("AIMINO_DISABLE_AUTOLOAD", "0").strip() == "1"
+SKIP_16K_CHECK = os.getenv("AIMINO_SKIP_16K_CHECK", "0").strip() == "1"  # Skip 16k pixel limit check
 
 from aimino_frontend.aimino_core import CommandExecutionError, execute_command
 from aimino_frontend.aimino_core.data_store import (
@@ -449,6 +450,8 @@ class DataImportDock(QtWidgets.QWidget):
 
     def _image_too_large(self, image_path: str) -> bool:
         """Check TIFF dimensions against common GL limits without full load."""
+        if SKIP_16K_CHECK:
+            return False  # User opted to skip this check
         try:
             with TiffFile(image_path) as tf:
                 shape = tf.series[0].shape
