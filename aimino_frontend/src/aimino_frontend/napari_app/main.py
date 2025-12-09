@@ -32,6 +32,7 @@ from tifffile import TiffFile
 AUTOLOAD_SIZE_LIMIT = int(os.getenv("AIMINO_AUTLOAD_MAX_BYTES", "500000000"))  # 500MB default
 DISABLE_AUTOLOAD = os.getenv("AIMINO_DISABLE_AUTOLOAD", "0").strip() == "1"
 SKIP_16K_CHECK = os.getenv("AIMINO_SKIP_16K_CHECK", "0").strip() == "1"  # Skip 16k pixel limit check
+AUTO_DOWNSAMPLE = int(os.getenv("AIMINO_AUTO_DOWNSAMPLE", "0"))  # Auto-downsample factor (0=disabled, 2=2x, 4=4x)
 
 from aimino_frontend.aimino_core import CommandExecutionError, execute_command
 from aimino_frontend.aimino_core.data_store import (
@@ -480,16 +481,25 @@ class DataImportDock(QtWidgets.QWidget):
         """Load mask/density if size is acceptable; otherwise warn to avoid freeze."""
         image_path = manifest.get("image_path", "")
         h5ad_path = manifest.get("h5ad_path", "")
+
+        # If auto-downsample is enabled, skip size checks and load directly
+        if AUTO_DOWNSAMPLE >= 1:
+            self._append_status(f"[info] Auto-downsample enabled ({AUTO_DOWNSAMPLE}x). Loading...")
+            self._run_command({"action": "special_load_marker_data", **base_cmd})
+            self._run_command({"action": "special_show_mask", **base_cmd})
+            self._run_command({"action": "special_show_density", **base_cmd})
+            return
+
         if self._image_too_large(str(image_path)):
             self._append_status(
                 "[info] Image exceeds 16k texture limit; auto-load skipped. "
-                "Use downsampled data or click 'Show current marker layers' to force load (may be slow)."
+                "Set AIMINO_AUTO_DOWNSAMPLE=2 in .env or click 'Load Marker Layers'."
             )
             return
         if not self._within_size_limit(str(image_path), str(h5ad_path)):
             self._append_status(
-                "[info] Large dataset detected; auto-load skipped to avoid freeze. "
-                "Click 'Show current marker layers' to load manually."
+                "[info] Large file detected; auto-load skipped. "
+                "Set AIMINO_AUTO_DOWNSAMPLE=2 in .env or click 'Load Marker Layers'."
             )
             return
         self._run_command({"action": "special_load_marker_data", **base_cmd})

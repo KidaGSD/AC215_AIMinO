@@ -7,6 +7,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Auto-downsample factor from environment (0=disabled, 2=2x, 4=4x, etc.)
+AUTO_DOWNSAMPLE = int(os.getenv("AIMINO_AUTO_DOWNSAMPLE", "0"))
+
 
 def _to_2d_gray_safe(arr):
     """Convert array to 2D grayscale, handling various input shapes."""
@@ -21,11 +24,29 @@ def _to_2d_gray_safe(arr):
     return _to_2d_gray_safe(a[0])
 
 
+def _apply_downsample(img: np.ndarray, factor: int) -> np.ndarray:
+    """Downsample image by given factor."""
+    if factor <= 1:
+        return img
+    logger.info(f"[image] auto-downsampling by {factor}x: {img.shape} -> {img.shape[0]//factor}x{img.shape[1]//factor}")
+    return img[::factor, ::factor]
+
+
 def load_image_for_mask(path: str) -> np.ndarray:
     """Load image from TIFF file for mask processing."""
     logger.info(f"[image] loading image for mask from {path}")
     with TiffFile(path) as tf:
         arr = tf.series[0].asarray()
     img = _to_2d_gray_safe(arr)
+
+    # Auto-downsample if enabled and image is large
+    if AUTO_DOWNSAMPLE > 1:
+        img = _apply_downsample(img, AUTO_DOWNSAMPLE)
+    elif max(img.shape) > 16384:
+        # Auto-calculate downsample factor to fit within 16k
+        factor = (max(img.shape) // 16384) + 1
+        logger.warning(f"[image] Image {img.shape} exceeds 16k, auto-downsampling by {factor}x")
+        img = _apply_downsample(img, factor)
+
     return img
 

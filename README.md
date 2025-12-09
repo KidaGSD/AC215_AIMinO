@@ -85,6 +85,7 @@ napari
   - `AIMINO_AUTLOAD_MAX_BYTES=500000000` (auto-load guard; set `0` to disable auto-load entirely)
   - `AIMINO_DISABLE_AUTOLOAD=0` (set `1` to disable all auto-load paths; use "Show current marker layers" to load manually)
   - `AIMINO_SKIP_16K_CHECK=0` (set `1` to skip 16k pixel dimension check; may cause slow loading or freezing)
+  - `AIMINO_AUTO_DOWNSAMPLE=0` (auto-downsample factor: 0=auto-calculate to fit 16k, 2=2x, 4=4x; recommended for large images)
 - Large image safety:
   - If TIFF dimensions exceed 16k per axis or size exceeds `AIMINO_AUTLOAD_MAX_BYTES`, auto-load is skipped with a status message.
   - For best performance, convert to multiscale (OME-Zarr or pyramidal OME-TIFF) and update `manifest.json` `image_path` to the multiscale asset.
