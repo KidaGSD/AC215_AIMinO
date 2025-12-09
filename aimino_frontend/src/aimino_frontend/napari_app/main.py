@@ -1,11 +1,25 @@
 """Minimal Napari launcher wired to AIMinO agent stack."""
 
-
-
+from pathlib import Path
 from typing import Optional, List
 import asyncio
 import os
 import threading
+
+# Load .env file from project root
+try:
+    from dotenv import load_dotenv
+    # Try to find .env in common locations
+    for env_path in [
+        Path.cwd() / ".env",
+        Path(__file__).parent.parent.parent.parent.parent.parent / ".env",
+        Path.home() / ".aimino" / ".env",
+    ]:
+        if env_path.exists():
+            load_dotenv(env_path)
+            break
+except ImportError:
+    pass  # dotenv not installed, use system env vars
 
 import napari
 import numpy as np
