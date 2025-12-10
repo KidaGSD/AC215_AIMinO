@@ -25,7 +25,6 @@ import napari
 import numpy as np
 from qtpy import QtWidgets, QtCore
 from pydantic import BaseModel
-import anndata as ad
 import h5py
 from tifffile import TiffFile
 
@@ -42,15 +41,21 @@ from aimino_frontend.aimino_core.data_store import (
     load_manifest,
     save_manifest,
     clear_processed_cache,
+    suggest_dataset_id,
 )
 from aimino_frontend.aimino_core.handlers.context_handler import set_context_functions
+from aimino_frontend.aimino_core.handlers.layer_management.layer_list import set_marker_resolver
 from .client_agent import AgentClient, load_last_session_id
 from .dataset_context import (
     get_context_payload,
     get_current_dataset_id,
     get_current_marker,
+    get_last_radius,
+    set_available_datasets,
+    set_available_markers,
     set_current_dataset,
     set_marker,
+    set_radius,
     update_from_command,
 )
 
@@ -61,6 +66,8 @@ set_context_functions(
     get_dataset_id_fn=get_current_dataset_id,
     get_marker_fn=get_current_marker,
 )
+# Provide current marker to layer alias resolver (tumor/immune) for layer panel commands
+set_marker_resolver(get_current_marker)
 
 
 class CommandDock(QtWidgets.QWidget):
@@ -349,6 +356,19 @@ class DataImportDock(QtWidgets.QWidget):
         secondary_row.addWidget(self.cache_cleanup_btn, 1)
         actions_layout.addLayout(secondary_row)
 
+        # Neighborhood controls
+        neigh_row = QtWidgets.QHBoxLayout()
+        self.neigh_radius = QtWidgets.QSpinBox()
+        self.neigh_radius.setRange(1, 500)
+        self.neigh_radius.setValue(int(get_last_radius() or 50))
+        self.neigh_radius.setSuffix(" px")
+        neigh_row.addWidget(QtWidgets.QLabel("Radius"))
+        neigh_row.addWidget(self.neigh_radius)
+        neigh_btn = QtWidgets.QPushButton("Compute Neighborhood")
+        neigh_btn.clicked.connect(self._compute_neighborhood)
+        neigh_row.addWidget(neigh_btn, 1)
+        actions_layout.addLayout(neigh_row)
+
         # Existing datasets
         existing = QtWidgets.QGroupBox("Existing datasets")
         existing_layout = QtWidgets.QFormLayout()
@@ -372,10 +392,21 @@ class DataImportDock(QtWidgets.QWidget):
         self.status.setMaximumHeight(160)
         self.layout().addWidget(self.status)
 
+        # Flag to prevent autoload during initialization
+        self._initializing = True
+        # Defer dataset refresh to avoid blocking UI on startup
+        QtCore.QTimer.singleShot(100, self._deferred_init)
+
+    def _deferred_init(self) -> None:
+        """Deferred initialization to avoid blocking UI on startup."""
         self._refresh_datasets()
+        self._initializing = False
 
     def _detect_markers(self, h5ad_path: str) -> List[str]:
-        """Try to infer marker columns from h5ad (bool or *_positive) with minimal I/O."""
+        """Try to infer marker columns from h5ad (bool or *_positive) with minimal I/O.
+
+        OPTIMIZED: Only uses h5py for fast column name scanning without loading data.
+        """
         markers: List[str] = []
         try:
             with h5py.File(h5ad_path, "r") as f:
@@ -383,30 +414,37 @@ class DataImportDock(QtWidgets.QWidget):
                     cols = list(f["obs"].keys())
                     for name in cols:
                         lname = str(name).lower()
-                        if lname.endswith("_positive") or lname.endswith("_pos") or lname.startswith("marker_") or lname in {"tumor", "tumor_positive"}:
+                        # Check for common marker naming patterns
+                        if (lname.endswith("_positive") or
+                            lname.endswith("_pos") or
+                            lname.startswith("marker_") or
+                            lname in {"tumor", "tumor_positive"}):
                             markers.append(str(name))
-        except Exception:
-            pass
-        try:
-            adata = ad.read_h5ad(h5ad_path, backed="r")
-            obs = adata.obs
-            for col in obs.columns:
-                name = str(col)
-                s = obs[col]
-                is_bool = s.dtype == bool
-                if not is_bool:
-                    uniq = set(str(x).strip().lower() for x in s.dropna().unique().tolist())
-                    is_bool = uniq.issubset({"true", "false", "t", "f", "1", "0", "yes", "no"})
-                if is_bool and (name.lower().endswith("_positive") or name.lower().endswith("_pos") or name.lower().startswith("marker_") or name.lower() in {"tumor", "tumor_positive"}):
-                    markers.append(name)
-            if not markers:
-                for col in obs.columns:
-                    s = obs[col]
-                    uniq = set(str(x).strip().lower() for x in s.dropna().unique().tolist())
-                    if uniq.issubset({"true", "false", "t", "f", "1", "0", "yes", "no"}):
-                        markers.append(str(col))
+                        # Also check for common immune marker names
+                        elif any(m in lname for m in ["cd45", "cd3", "cd4", "cd8", "cd20", "sox10", "foxp3", "ki67"]):
+                            if "_positive" in lname or "_pos" in lname:
+                                markers.append(str(name))
         except Exception as exc:
-            self._append_status(f"[warn] marker auto-detect failed: {exc}")
+            self._append_status(f"[warn] h5py marker scan failed: {exc}")
+
+        # If no markers found by name pattern, try a quick dtype check (limited)
+        if not markers:
+            try:
+                with h5py.File(h5ad_path, "r") as f:
+                    if "obs" in f:
+                        obs_group = f["obs"]
+                        for name in list(obs_group.keys())[:50]:  # Limit to first 50 columns
+                            try:
+                                ds = obs_group[name]
+                                # Check if it's a categorical or boolean-like column
+                                if hasattr(ds, 'dtype'):
+                                    if ds.dtype == bool or str(ds.dtype).startswith('|S'):
+                                        markers.append(str(name))
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
         return sorted(dict.fromkeys(markers))
 
     def _browse_file(self, target: QtWidgets.QLineEdit, title: str, filter_str: str) -> None:
@@ -565,6 +603,8 @@ class DataImportDock(QtWidgets.QWidget):
         self._append_status(f"[ok] Dataset '{dataset_id}' stored at {manifest['output_root']}")
         self._refresh_datasets(select=dataset_id)
         set_current_dataset(dataset_id, marker_col or None)
+        if marker_col:
+            set_available_markers([marker_col])
         # Auto-load mask/density if marker is provided
         if marker_col and not DISABLE_AUTOLOAD:
             base_cmd = {"dataset_id": dataset_id, "marker_col": marker_col}
@@ -576,6 +616,7 @@ class DataImportDock(QtWidgets.QWidget):
         self.dataset_combo.blockSignals(True)
         self.dataset_combo.clear()
         entries = sorted(list(list_datasets()))
+        set_available_datasets(entries)
         self.dataset_combo.addItem("(none)")
         autoload_ds: Optional[str] = None
         for ds in entries:
@@ -604,6 +645,7 @@ class DataImportDock(QtWidgets.QWidget):
         if ds and ds != "(none)":
             self.dataset_id_input.setText(ds)
             marker = None
+            manifest_data = {}
             try:
                 manifest = get_dataset_paths(ds)
                 self._append_status(f"[dataset] {ds}: loaded manifest")
@@ -613,6 +655,7 @@ class DataImportDock(QtWidgets.QWidget):
                     marker = marker_cols[0]
                     self.marker_col_input.setText(marker)
                     set_marker(marker)
+                    set_available_markers(marker_cols)
                 else:
                     # Auto-detect marker if manifest missing
                     candidates = self._detect_markers(manifest.h5ad_path)
@@ -620,6 +663,7 @@ class DataImportDock(QtWidgets.QWidget):
                         marker = candidates[0]
                         self.marker_col_input.setText(marker)
                         set_marker(marker)
+                        set_available_markers(candidates)
                         manifest_data.setdefault("metadata", {})["marker_cols"] = candidates
                         try:
                             save_manifest(ds, manifest_data)
@@ -629,14 +673,18 @@ class DataImportDock(QtWidgets.QWidget):
             except Exception as exc:
                 self._append_status(f"[warning] Failed to read dataset '{ds}': {exc}")
             self._emit_selection(ds, marker)
-            if marker and not DISABLE_AUTOLOAD:
+            # Skip autoload during initialization to prevent UI freeze
+            if getattr(self, '_initializing', False):
+                self._append_status("[info] Dataset loaded. Use 'Load Marker Layers' to view.")
+            elif marker and not DISABLE_AUTOLOAD and manifest_data:
                 base_cmd = {"dataset_id": ds, "marker_col": marker}
                 self._append_status("[auto] preparing mask/density for selected dataset")
                 self._safe_autoload(manifest_data, base_cmd)
             else:
-                self._append_status("[info] Autoload disabled or marker missing; use 'Show current marker layers' to load.")
+                self._append_status("[info] Autoload disabled or marker missing; use 'Load Marker Layers' to load.")
         else:
             self._emit_selection(None)
+            set_available_markers([])
 
     def _emit_selection(self, dataset_id: Optional[str], marker: Optional[str] = None) -> None:
         set_current_dataset(dataset_id, marker)
@@ -653,6 +701,24 @@ class DataImportDock(QtWidgets.QWidget):
         except Exception as exc:
             self._append_status(f"[error] cache cleanup failed: {exc}")
 
+    def _compute_neighborhood(self) -> None:
+        """Compute neighborhood layers for the current dataset/marker."""
+        ds = get_current_dataset_id()
+        marker = get_current_marker()
+        if not ds or not marker:
+            self._append_status("[warn] Select dataset + marker before computing neighborhood.")
+            return
+        radius = float(self.neigh_radius.value())
+        set_radius(radius)
+        cmd = {
+            "action": "special_compute_neighborhood",
+            "dataset_id": ds,
+            "marker_col": marker,
+            "radius": radius,
+            "force_recompute": False,
+        }
+        self._run_command(cmd)
+
     def _highlight_layers(self) -> None:
         """Make mask/density layers visible for current marker."""
         ds = get_current_dataset_id()
@@ -665,6 +731,9 @@ class DataImportDock(QtWidgets.QWidget):
             manifest = load_manifest(ds)
         except Exception:
             manifest = {}
+        markers = manifest.get("metadata", {}).get("marker_cols") or []
+        if markers:
+            set_available_markers(markers)
         if self._image_too_large(str(manifest.get("image_path", ""))):
             self._append_status("[warn] Image too large for safe load; consider downsampled/pyramid data.")
             return
@@ -717,6 +786,196 @@ class AIMinOMainDock(QtWidgets.QWidget):
                 font-weight: bold;
             }
         """)
+
+        # Hook into layer added events to detect TIFF drag-and-drop
+        # Use a flag to skip events during initialization
+        self._skip_layer_events = True
+        self.viewer.layers.events.inserted.connect(self._on_layer_inserted)
+        # Enable event handling after a short delay (after init completes)
+        QtCore.QTimer.singleShot(500, self._enable_layer_events)
+
+    def _enable_layer_events(self) -> None:
+        """Enable layer event handling after initialization."""
+        self._skip_layer_events = False
+
+    def _on_layer_inserted(self, event) -> None:
+        """Detect when a new layer is added (e.g., via drag-and-drop) and offer registration."""
+        # Skip events during initialization
+        if getattr(self, '_skip_layer_events', True):
+            return
+
+        layer = event.value
+        # Check if the layer has a source path (drag-and-drop files have this)
+        source_path = None
+        try:
+            # Napari stores source info in layer.source.path for drag-and-drop
+            source_obj = getattr(layer, 'source', None)
+            if source_obj is not None:
+                source_path = getattr(source_obj, 'path', None)
+        except Exception:
+            pass
+
+        if source_path is None:
+            # Check layer metadata as fallback
+            try:
+                meta = getattr(layer, 'metadata', {}) or {}
+                source_path = meta.get('path') or meta.get('source_path')
+            except Exception:
+                pass
+
+        if source_path is None:
+            return
+
+        source_path = str(source_path)
+        # Check if it's a TIFF file
+        if not source_path.lower().endswith(('.tif', '.tiff', '.ome.tif', '.ome.tiff')):
+            return
+
+        # Delay showing dialog to avoid blocking event loop
+        QtCore.QTimer.singleShot(100, lambda: self._show_registration_dialog(source_path, layer.name))
+
+    def _show_registration_dialog(self, tiff_path: str, layer_name: str) -> None:
+        """Show dialog asking if user wants to register the TIFF to DataStore.
+
+        Args:
+            tiff_path: Path to the TIFF file
+            layer_name: Name of the layer in Napari (used for context in messages)
+        """
+        from pathlib import Path
+        _ = layer_name  # Reserved for future use (e.g., pre-filling dataset ID)
+
+        tiff_file = Path(tiff_path)
+
+        # Auto-detect corresponding h5ad file (same directory, same stem name)
+        h5ad_candidates = [
+            tiff_file.with_suffix('.h5ad'),
+            tiff_file.parent / (tiff_file.stem.replace('.ome', '') + '.h5ad'),
+        ]
+        # Also check without common suffixes
+        stem = tiff_file.stem
+        for suffix in ['.ome', '_ome']:
+            if stem.endswith(suffix):
+                h5ad_candidates.append(tiff_file.parent / (stem[:-len(suffix)] + '.h5ad'))
+
+        h5ad_path = None
+        for candidate in h5ad_candidates:
+            if candidate.exists():
+                h5ad_path = candidate
+                break
+
+        # Create dialog
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Register Dataset to AIMinO")
+        dialog.setMinimumWidth(450)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        # Info label
+        info_text = f"TIFF file detected:\n{tiff_path}\n\n"
+        if h5ad_path:
+            info_text += f"Matching h5ad found:\n{h5ad_path}\n\n"
+        else:
+            info_text += "No matching h5ad file found automatically.\n\n"
+        info_text += "Would you like to register this dataset with AIMinO?"
+
+        info_label = QtWidgets.QLabel(info_text)
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Dataset ID input
+        form = QtWidgets.QFormLayout()
+        dataset_id_input = QtWidgets.QLineEdit()
+        dataset_id_input.setPlaceholderText(f"auto: {suggest_dataset_id(tiff_path)}")
+        form.addRow("Dataset ID:", dataset_id_input)
+
+        # h5ad path input (pre-filled if found)
+        h5ad_input = QtWidgets.QLineEdit()
+        if h5ad_path:
+            h5ad_input.setText(str(h5ad_path))
+        else:
+            h5ad_input.setPlaceholderText("Select h5ad file...")
+        h5ad_row = QtWidgets.QHBoxLayout()
+        h5ad_row.addWidget(h5ad_input)
+        h5ad_browse = QtWidgets.QPushButton("Browse")
+        h5ad_browse.clicked.connect(lambda: self._browse_h5ad_for_dialog(h5ad_input))
+        h5ad_row.addWidget(h5ad_browse)
+        form.addRow("h5ad file:", h5ad_row)
+
+        layout.addLayout(form)
+
+        # Buttons
+        btn_layout = QtWidgets.QHBoxLayout()
+        register_btn = QtWidgets.QPushButton("Register")
+        register_btn.setStyleSheet("padding: 8px; font-weight: bold; background: #4a7c59;")
+        skip_btn = QtWidgets.QPushButton("Skip")
+        skip_btn.setStyleSheet("padding: 8px;")
+
+        btn_layout.addWidget(skip_btn)
+        btn_layout.addWidget(register_btn)
+        layout.addLayout(btn_layout)
+
+        def on_register():
+            h5ad_val = h5ad_input.text().strip()
+            if not h5ad_val:
+                QtWidgets.QMessageBox.warning(dialog, "Missing h5ad", "Please select an h5ad file.")
+                return
+            if not Path(h5ad_val).exists():
+                QtWidgets.QMessageBox.warning(dialog, "File not found", f"h5ad file not found: {h5ad_val}")
+                return
+
+            dataset_id = dataset_id_input.text().strip() or None
+            dialog.accept()
+            self._register_dropped_dataset(tiff_path, h5ad_val, dataset_id)
+
+        register_btn.clicked.connect(on_register)
+        skip_btn.clicked.connect(dialog.reject)
+
+        dialog.exec_()
+
+    def _browse_h5ad_for_dialog(self, target: QtWidgets.QLineEdit) -> None:
+        """Browse for h5ad file in registration dialog."""
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select h5ad file", "", "h5ad Files (*.h5ad);;All Files (*)"
+        )
+        if path:
+            target.setText(path)
+
+    def _register_dropped_dataset(self, tiff_path: str, h5ad_path: str, dataset_id: Optional[str]) -> None:
+        """Register a drag-and-dropped dataset to the DataStore."""
+        try:
+            # Detect markers from h5ad
+            markers = self.data_tab._detect_markers(h5ad_path)
+            metadata = {"marker_cols": markers} if markers else None
+
+            manifest = ingest_dataset(
+                tiff_path,
+                h5ad_path,
+                dataset_id=dataset_id,
+                copy_files=False,
+                metadata=metadata,
+            )
+
+            registered_id = manifest["dataset_id"]
+            marker = markers[0] if markers else None
+
+            # Update UI
+            self.data_tab._append_status(f"[ok] Registered drag-and-drop dataset: {registered_id}")
+            self.data_tab._refresh_datasets(select=registered_id)
+            set_current_dataset(registered_id, marker)
+
+            # Switch to Data tab and show success
+            self.tabs.setCurrentIndex(1)
+            self.data_tab.dataset_id_input.setText(registered_id)
+            if marker:
+                self.data_tab.marker_col_input.setText(marker)
+
+            self.chat_tab.log(f"[dataset] Registered '{registered_id}' from drag-and-drop")
+            self.chat_tab._refresh_dataset_label()
+
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(
+                self, "Registration Failed", f"Failed to register dataset:\n{exc}"
+            )
 
 
 def get_dock_widget(viewer: napari.Viewer) -> AIMinOMainDock:

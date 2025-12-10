@@ -40,6 +40,9 @@ def compute_tumor_neighborhood_layers(
 
     Uses (y, x) order for coordinates to match napari's image indexing.
     """
+    if radius is None or float(radius) <= 0:
+        raise ValueError(f"Radius must be positive, got {radius!r}")
+
     logger.info(
         f"[neigh] compute_tumor_neighborhood_layers radius={radius}, force={force_recompute}"
     )
@@ -65,6 +68,13 @@ def compute_tumor_neighborhood_layers(
         logger.info(f"[neigh] reading h5ad: {h5ad_path}")
         adata = ad.read_h5ad(h5ad_path)
         obs = adata.obs.copy()
+
+        required_cols = ["X_centroid", "Y_centroid"]
+        missing = [c for c in required_cols if c not in obs.columns]
+        if missing:
+            raise ValueError(f"Missing required columns in obs: {', '.join(missing)}")
+        if marker_col not in obs.columns:
+            raise ValueError(f"obs missing marker column '{marker_col}'")
 
         # coordinates as (y, x) to match napari image
         x_all = obs["X_centroid"].to_numpy()
@@ -184,22 +194,23 @@ def compute_tumor_neighborhood_layers(
         if coords.size == 0:
             logger.info(f"[neigh] {name}: no points to draw.")
             return
+        face_colors = np.tile(np.array(rgba, dtype=float)[None, :], (len(coords), 1))
 
         ly = find_layer(viewer, name)
         if ly is None:
             viewer.add_points(
                 coords,
                 size=size,
-                face_color=rgba,
+                face_color=face_colors,
                 name=name,
                 blending="translucent",
-                opacity=rgba[3],
+                opacity=float(rgba[3]),
             )
         else:
             ly.data = coords
             ly.size = size
-            ly.face_color = rgba
-            ly.opacity = rgba[3]
+            ly.face_color = face_colors
+            ly.opacity = float(rgba[3])
 
     add_points_layer(
         f"{marker_col}_neigh_tumor",
@@ -250,4 +261,3 @@ def compute_tumor_neighborhood_layers(
 
     logger.info("[neigh] neighborhood layers added/updated in napari.")
     return "Tumor neighborhood computed and layers updated."
-

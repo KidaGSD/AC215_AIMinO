@@ -28,6 +28,41 @@ from ...command_models import (
     CmdListLayers,
 )
 from ...errors import CommandExecutionError
+
+_marker_resolver = None  # optional callable to fetch current marker
+
+
+def set_marker_resolver(fn) -> None:
+    """Allow napari app to inject a function returning the current marker."""
+    global _marker_resolver
+    _marker_resolver = fn
+
+
+def _resolve_alias(name: str) -> str:
+    """Map common aliases (tumor/immune) to concrete layer names."""
+    q = name.strip().lower()
+    marker = None
+    if callable(_marker_resolver):
+        try:
+            marker = _marker_resolver()
+        except Exception:
+            marker = None
+
+    if q in {"tumor", "tumor layer", "tumor mask"}:
+        if marker:
+            return f"{marker}_mask"
+        return "SOX10_positive_mask"
+    if q in {"tumor density", "tumor heatmap", "density"}:
+        if marker:
+            return f"{marker}_density"
+        return "SOX10_positive_density"
+    if q in {"tumor boundary", "boundary", "tumor outline"}:
+        if marker:
+            return f"{marker}_density_boundary"
+        return "SOX10_positive_density_boundary"
+    if q in {"immune", "immune cells", "immune layer"}:
+        return "CD45_positive_mask"
+    return name
 from ...registry import register_handler
 
 if TYPE_CHECKING:
@@ -49,6 +84,9 @@ def find_layer(viewer: "Viewer", name: str) -> Optional["Layer"]:
     query = name.strip().lower()
     if not query:
         return None
+    # resolve aliases using current marker context if available
+    name = _resolve_alias(name)
+    query = name.strip().lower()
 
     for layer in viewer.layers:
         if layer.name.lower() == query:
@@ -418,4 +456,3 @@ __all__ = [
     "iter_layers",
     "list_layers",
 ]
-

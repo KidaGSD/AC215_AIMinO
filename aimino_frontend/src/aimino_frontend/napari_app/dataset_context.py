@@ -12,6 +12,8 @@ class _DatasetContextState:
     marker_col: Optional[str] = None
     last_sigma: Optional[float] = None
     last_radius: Optional[float] = None
+    available_datasets: list[str] = None  # type: ignore[assignment]
+    available_markers: list[str] = None  # type: ignore[assignment]
 
 
 _STATE = _DatasetContextState()
@@ -51,6 +53,22 @@ def get_last_radius() -> Optional[float]:
     return _STATE.last_radius
 
 
+def set_available_datasets(values: Optional[list[str]]) -> None:
+    _STATE.available_datasets = values or []
+
+
+def get_available_datasets() -> list[str]:
+    return _STATE.available_datasets or []
+
+
+def set_available_markers(values: Optional[list[str]]) -> None:
+    _STATE.available_markers = values or []
+
+
+def get_available_markers() -> list[str]:
+    return _STATE.available_markers or []
+
+
 def get_context_payload() -> dict:
     payload = {}
     if _STATE.dataset_id:
@@ -61,6 +79,10 @@ def get_context_payload() -> dict:
         payload["sigma"] = _STATE.last_sigma
     if _STATE.last_radius is not None:
         payload["radius"] = _STATE.last_radius
+    if _STATE.available_datasets:
+        payload["dataset_candidates"] = list(_STATE.available_datasets)
+    if _STATE.available_markers:
+        payload["marker_candidates"] = list(_STATE.available_markers)
     return payload
 
 
@@ -92,6 +114,10 @@ __all__ = [
     "get_last_sigma",
     "set_radius",
     "get_last_radius",
+    "set_available_datasets",
+    "get_available_datasets",
+    "set_available_markers",
+    "get_available_markers",
     "get_context_payload",
     "update_from_command",
 ]
