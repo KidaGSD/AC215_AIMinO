@@ -380,17 +380,44 @@ jobs:
       - name: Merge unit tests coverage
         run: |
           echo "🔍 Debugging: Listing all files after download..."
-          find . -name ".coverage*" -o -name "coverage*" 2>/dev/null | head -20
+          find . -name ".coverage*" -o -name "coverage*" 2>/dev/null | head -30
           echo ""
           echo "🔍 Debugging: Current directory contents..."
           ls -la
           echo ""
           echo "🔍 Debugging: Checking subdirectories..."
-          find . -type d -name "*coverage*" 2>/dev/null | head -10
+          find . -type d 2>/dev/null | grep -E "(coverage|artifact)" | head -10
+          echo ""
+          echo "🔍 Debugging: Recursive search for coverage files..."
+          find . -type f -name ".coverage*" 2>/dev/null
           echo ""
           
-          # Find all unit coverage files (they might be in subdirectories)
-          UNIT_FILES=$(find . -name ".coverage.unit.*" -type f 2>/dev/null | sort)
+          # Find all unit coverage files (they might be in subdirectories or have different names)
+          # Also check for files in artifact subdirectories
+          UNIT_FILES=$(find . \( -name ".coverage.unit.*" -o -path "*/coverage-data-unit-*/.coverage.unit.*" \) -type f 2>/dev/null | sort)
+          
+          # If no files found with expected names, look for any .coverage files in unit artifact directories
+          if [ -z "$UNIT_FILES" ]; then
+            echo "⚠️  No files with .coverage.unit.* pattern, checking artifact directories..."
+            for dir in coverage-data-unit-*; do
+              if [ -d "$dir" ]; then
+                echo "  Checking directory: $dir"
+                find "$dir" -name ".coverage*" -type f 2>/dev/null
+                # Copy files from artifact directories to current directory with proper names
+                for f in $(find "$dir" -name ".coverage*" -type f 2>/dev/null); do
+                  if [ -f "$f" ]; then
+                    # Extract version from directory name (e.g., coverage-data-unit-3.10 -> 3.10)
+                    VERSION=$(echo "$dir" | sed 's/coverage-data-unit-//')
+                    NEW_NAME=".coverage.unit.$VERSION"
+                    cp "$f" "$NEW_NAME"
+                    echo "  ✓ Copied $f to $NEW_NAME"
+                    UNIT_FILES="$UNIT_FILES $NEW_NAME"
+                  fi
+                done
+              fi
+            done
+            UNIT_FILES=$(echo $UNIT_FILES | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          fi
           
           if [ -n "$UNIT_FILES" ]; then
             echo "✓ Found unit coverage files:"
@@ -476,9 +503,36 @@ jobs:
       - name: Merge integration tests coverage
         run: |
           echo "🔍 Debugging: Finding integration coverage files..."
+          echo "🔍 Debugging: Recursive search for coverage files..."
+          find . -type f -name ".coverage*" 2>/dev/null
+          echo ""
           
-          # Find all integration coverage files (they might be in subdirectories)
-          INT_FILES=$(find . -name ".coverage.integration.*" -type f 2>/dev/null | sort)
+          # Find all integration coverage files (they might be in subdirectories or have different names)
+          # Also check for files in artifact subdirectories
+          INT_FILES=$(find . \( -name ".coverage.integration.*" -o -path "*/coverage-data-integration-*/.coverage.integration.*" \) -type f 2>/dev/null | sort)
+          
+          # If no files found with expected names, look for any .coverage files in integration artifact directories
+          if [ -z "$INT_FILES" ]; then
+            echo "⚠️  No files with .coverage.integration.* pattern, checking artifact directories..."
+            for dir in coverage-data-integration-*; do
+              if [ -d "$dir" ]; then
+                echo "  Checking directory: $dir"
+                find "$dir" -name ".coverage*" -type f 2>/dev/null
+                # Copy files from artifact directories to current directory with proper names
+                for f in $(find "$dir" -name ".coverage*" -type f 2>/dev/null); do
+                  if [ -f "$f" ]; then
+                    # Extract version from directory name (e.g., coverage-data-integration-3.10 -> 3.10)
+                    VERSION=$(echo "$dir" | sed 's/coverage-data-integration-//')
+                    NEW_NAME=".coverage.integration.$VERSION"
+                    cp "$f" "$NEW_NAME"
+                    echo "  ✓ Copied $f to $NEW_NAME"
+                    INT_FILES="$INT_FILES $NEW_NAME"
+                  fi
+                done
+              fi
+            done
+            INT_FILES=$(echo $INT_FILES | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          fi
           
           if [ -n "$INT_FILES" ]; then
             echo "✓ Found integration coverage files:"
