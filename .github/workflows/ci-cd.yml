@@ -131,6 +131,8 @@ jobs:
             --junit-xml=junit-unit-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
             -v
+          ls -la
+          ls -la .coverage || echo ".coverage binary not found"
 
       - name: Save coverage data file
         run: |
@@ -145,6 +147,7 @@ jobs:
           fi
           if [ -f "coverage.xml" ]; then
             echo "✓ Found coverage.xml ($(wc -c < coverage.xml) bytes)"
+            mv coverage.xml coverage-unit-${{ matrix.python-version }}.xml
           else
             echo "⚠️  coverage.xml not found"
           fi
@@ -157,7 +160,7 @@ jobs:
           name: coverage-data-unit-${{ matrix.python-version }}
           path: |
             .coverage.unit.${{ matrix.python-version }}
-            coverage.xml
+            coverage-unit-${{ matrix.python-version }}.xml
           retention-days: 1
         continue-on-error: true
 
@@ -213,6 +216,8 @@ jobs:
             --junit-xml=junit-integration-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
             -v
+          ls -la
+          ls -la .coverage || echo ".coverage binary not found"
 
       - name: Save coverage data file
         run: |
@@ -227,6 +232,7 @@ jobs:
           fi
           if [ -f "coverage.xml" ]; then
             echo "✓ Found coverage.xml ($(wc -c < coverage.xml) bytes)"
+            mv coverage.xml coverage-integration-${{ matrix.python-version }}.xml
           else
             echo "⚠️  coverage.xml not found"
           fi
@@ -239,7 +245,7 @@ jobs:
           name: coverage-data-integration-${{ matrix.python-version }}
           path: |
             .coverage.integration.${{ matrix.python-version }}
-            coverage.xml
+            coverage-integration-${{ matrix.python-version }}.xml
           retention-days: 1
         continue-on-error: true
 
