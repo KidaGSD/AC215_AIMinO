@@ -507,12 +507,13 @@ jobs:
                 else
                   # Multiple XML files, need to merge them
                   echo "Merging $XML_COUNT coverage.xml files..."
-                  python3 - "$XML_FILES" << 'PYEOF'
+                  XML_FILES="$XML_FILES" python3 << 'PYEOF'
 import xml.etree.ElementTree as ET
 import sys
-import glob
+import os
 
-xml_files = sys.argv[1].split()
+xml_files_str = os.environ.get('XML_FILES', '')
+xml_files = xml_files_str.split() if xml_files_str else []
 if not xml_files:
     print("No XML files to merge")
     sys.exit(1)
@@ -749,12 +750,14 @@ PYEOF
                 else
                   # Multiple XML files, need to merge them
                   echo "Merging $XML_COUNT coverage.xml files..."
-                  python3 - "$XML_FILES" << 'PYEOF'
+                  XML_FILES="$XML_FILES" python3 << 'PYEOF'
 import xml.etree.ElementTree as ET
 import sys
+import os
 import time
 
-xml_files = sys.argv[1].split()
+xml_files_str = os.environ.get('XML_FILES', '')
+xml_files = xml_files_str.split() if xml_files_str else []
 if not xml_files:
     print("No XML files to merge")
     sys.exit(1)
