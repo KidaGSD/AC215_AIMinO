@@ -125,8 +125,6 @@ jobs:
           pip install -e "aimino_frontend"
 
       - name: Run unit tests
-        env:
-          COVERAGE_FILE: .coverage.unit.${{ matrix.python-version }}
         run: |
           pytest -m unit --cov=src/api_service --cov=aimino_frontend \
             --cov-report=term-missing --cov-report=xml \
@@ -134,13 +132,16 @@ jobs:
             --cov-fail-under=0 \
             -v
 
-      - name: Check and upload coverage data
+      - name: Save coverage data file
         run: |
           echo "Checking for coverage files..."
-          if [ -f ".coverage.unit.${{ matrix.python-version }}" ]; then
-            echo "✓ Found .coverage.unit.${{ matrix.python-version }} ($(wc -c < .coverage.unit.${{ matrix.python-version }}) bytes)"
+          if [ -f ".coverage" ]; then
+            echo "✓ Found .coverage ($(wc -c < .coverage) bytes)"
+            cp .coverage .coverage.unit.${{ matrix.python-version }}
+            echo "✓ Copied to .coverage.unit.${{ matrix.python-version }}"
           else
-            echo "⚠️  .coverage.unit.${{ matrix.python-version }} not found"
+            echo "⚠️  .coverage not found, checking for other coverage files..."
+            find . -name ".coverage*" -type f | head -5
           fi
           if [ -f "coverage.xml" ]; then
             echo "✓ Found coverage.xml ($(wc -c < coverage.xml) bytes)"
@@ -206,8 +207,6 @@ jobs:
           pip install -e "aimino_frontend"
 
       - name: Run integration tests
-        env:
-          COVERAGE_FILE: .coverage.integration.${{ matrix.python-version }}
         run: |
           pytest -m integration --cov=src/api_service --cov=aimino_frontend \
             --cov-report=term-missing --cov-report=xml \
@@ -215,13 +214,16 @@ jobs:
             --cov-fail-under=0 \
             -v
 
-      - name: Check and upload coverage data
+      - name: Save coverage data file
         run: |
           echo "Checking for coverage files..."
-          if [ -f ".coverage.integration.${{ matrix.python-version }}" ]; then
-            echo "✓ Found .coverage.integration.${{ matrix.python-version }} ($(wc -c < .coverage.integration.${{ matrix.python-version }}) bytes)"
+          if [ -f ".coverage" ]; then
+            echo "✓ Found .coverage ($(wc -c < .coverage) bytes)"
+            cp .coverage .coverage.integration.${{ matrix.python-version }}
+            echo "✓ Copied to .coverage.integration.${{ matrix.python-version }}"
           else
-            echo "⚠️  .coverage.integration.${{ matrix.python-version }} not found"
+            echo "⚠️  .coverage not found, checking for other coverage files..."
+            find . -name ".coverage*" -type f | head -5
           fi
           if [ -f "coverage.xml" ]; then
             echo "✓ Found coverage.xml ($(wc -c < coverage.xml) bytes)"
@@ -378,49 +380,90 @@ jobs:
       - name: Merge unit tests coverage
         run: |
           echo "🔍 Debugging: Listing all files after download..."
-          find . -name ".coverage*" -o -name "coverage*" | head -20
+          find . -name ".coverage*" -o -name "coverage*" 2>/dev/null | head -20
           echo ""
           echo "🔍 Debugging: Current directory contents..."
           ls -la
           echo ""
+          echo "🔍 Debugging: Checking subdirectories..."
+          find . -type d -name "*coverage*" 2>/dev/null | head -10
+          echo ""
           
           # Find all unit coverage files (they might be in subdirectories)
-          UNIT_FILES=$(find . -name ".coverage.unit.*" -type f 2>/dev/null)
+          UNIT_FILES=$(find . -name ".coverage.unit.*" -type f 2>/dev/null | sort)
           
           if [ -n "$UNIT_FILES" ]; then
             echo "✓ Found unit coverage files:"
             echo "$UNIT_FILES"
             echo ""
             
-            # Check file sizes
+            # Check file sizes and validate they're not empty
+            VALID_FILES=""
             for f in $UNIT_FILES; do
-              echo "  $f: $(wc -c < "$f") bytes"
+              SIZE=$(wc -c < "$f" 2>/dev/null || echo "0")
+              echo "  $f: $SIZE bytes"
+              if [ "$SIZE" -gt 100 ]; then
+                VALID_FILES="$VALID_FILES $f"
+              else
+                echo "    ⚠️  File is too small, skipping"
+              fi
             done
             echo ""
             
-            # Combine all unit coverage files
-            coverage combine $UNIT_FILES || {
-              echo "⚠️  coverage combine failed, trying individual files..."
-              # Try to use the first file if combine fails
-              FIRST_FILE=$(echo $UNIT_FILES | cut -d' ' -f1)
-              if [ -f "$FIRST_FILE" ]; then
-                cp "$FIRST_FILE" .coverage
-                echo "Using single file: $FIRST_FILE"
+            if [ -n "$VALID_FILES" ]; then
+              # Try to combine all valid files
+              echo "Attempting to combine coverage files..."
+              if coverage combine $VALID_FILES 2>&1; then
+                echo "✓ Successfully combined coverage files"
+              else
+                echo "⚠️  coverage combine failed, using first valid file..."
+                FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
+                if [ -f "$FIRST_FILE" ]; then
+                  cp "$FIRST_FILE" .coverage
+                  echo "Using single file: $FIRST_FILE"
+                fi
               fi
-            }
-            
-            # Generate reports with source paths
-            coverage xml -o coverage-unit-merged.xml --include="src/api_service/*,aimino_frontend/*" || coverage xml -o coverage-unit-merged.xml
-            coverage html -d htmlcov-unit || true
-            coverage report --show-missing > coverage-unit-summary.txt || echo "No coverage data" > coverage-unit-summary.txt
-            
-            echo "Unit Tests Coverage Summary:"
-            cat coverage-unit-summary.txt
-            echo ""
-            if [ -f coverage-unit-merged.xml ]; then
-              echo "✓ Generated coverage-unit-merged.xml ($(wc -c < coverage-unit-merged.xml) bytes)"
+              
+              # Generate reports - ensure source code is available
+              echo "Generating coverage reports..."
+              if [ -d "src/api_service" ] || [ -d "aimino_frontend" ]; then
+                coverage xml -o coverage-unit-merged.xml || {
+                  echo "⚠️  coverage xml failed, checking .coverage file..."
+                  if [ -f ".coverage" ]; then
+                    echo "  .coverage exists ($(wc -c < .coverage) bytes)"
+                    coverage xml -o coverage-unit-merged.xml --skip-empty || true
+                  fi
+                }
+                coverage html -d htmlcov-unit || true
+                coverage report --show-missing > coverage-unit-summary.txt 2>&1 || {
+                  echo "⚠️  coverage report failed"
+                  coverage report > coverage-unit-summary.txt 2>&1 || echo "No coverage data" > coverage-unit-summary.txt
+                }
+              else
+                echo "⚠️  Source directories not found, generating reports anyway..."
+                coverage xml -o coverage-unit-merged.xml || true
+                coverage report > coverage-unit-summary.txt 2>&1 || echo "No coverage data" > coverage-unit-summary.txt
+              fi
+              
+              echo ""
+              echo "Unit Tests Coverage Summary:"
+              cat coverage-unit-summary.txt
+              echo ""
+              if [ -f coverage-unit-merged.xml ]; then
+                SIZE=$(wc -c < coverage-unit-merged.xml)
+                echo "✓ Generated coverage-unit-merged.xml ($SIZE bytes)"
+                if [ "$SIZE" -lt 200 ]; then
+                  echo "  ⚠️  File is very small, may be empty"
+                  head -5 coverage-unit-merged.xml
+                fi
+              else
+                echo "⚠️  Failed to generate coverage-unit-merged.xml"
+              fi
             else
-              echo "⚠️  Failed to generate coverage-unit-merged.xml"
+              echo "⚠️  No valid unit coverage files found (all files were empty or too small)"
+              echo "No coverage data available" > coverage-unit-summary.txt
+              echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-unit-merged.xml
+              mkdir -p htmlcov-unit
             fi
           else
             echo "⚠️  No unit coverage data files found"
@@ -435,42 +478,80 @@ jobs:
           echo "🔍 Debugging: Finding integration coverage files..."
           
           # Find all integration coverage files (they might be in subdirectories)
-          INT_FILES=$(find . -name ".coverage.integration.*" -type f 2>/dev/null)
+          INT_FILES=$(find . -name ".coverage.integration.*" -type f 2>/dev/null | sort)
           
           if [ -n "$INT_FILES" ]; then
             echo "✓ Found integration coverage files:"
             echo "$INT_FILES"
             echo ""
             
-            # Check file sizes
+            # Check file sizes and validate they're not empty
+            VALID_FILES=""
             for f in $INT_FILES; do
-              echo "  $f: $(wc -c < "$f") bytes"
+              SIZE=$(wc -c < "$f" 2>/dev/null || echo "0")
+              echo "  $f: $SIZE bytes"
+              if [ "$SIZE" -gt 100 ]; then
+                VALID_FILES="$VALID_FILES $f"
+              else
+                echo "    ⚠️  File is too small, skipping"
+              fi
             done
             echo ""
             
-            # Combine all integration coverage files
-            coverage combine $INT_FILES || {
-              echo "⚠️  coverage combine failed, trying individual files..."
-              # Try to use the first file if combine fails
-              FIRST_FILE=$(echo $INT_FILES | cut -d' ' -f1)
-              if [ -f "$FIRST_FILE" ]; then
-                cp "$FIRST_FILE" .coverage
-                echo "Using single file: $FIRST_FILE"
+            if [ -n "$VALID_FILES" ]; then
+              # Try to combine all valid files
+              echo "Attempting to combine coverage files..."
+              if coverage combine $VALID_FILES 2>&1; then
+                echo "✓ Successfully combined coverage files"
+              else
+                echo "⚠️  coverage combine failed, using first valid file..."
+                FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
+                if [ -f "$FIRST_FILE" ]; then
+                  cp "$FIRST_FILE" .coverage
+                  echo "Using single file: $FIRST_FILE"
+                fi
               fi
-            }
-            
-            # Generate reports with source paths
-            coverage xml -o coverage-integration-merged.xml --include="src/api_service/*,aimino_frontend/*" || coverage xml -o coverage-integration-merged.xml
-            coverage html -d htmlcov-integration || true
-            coverage report --show-missing > coverage-integration-summary.txt || echo "No coverage data" > coverage-integration-summary.txt
-            
-            echo "Integration Tests Coverage Summary:"
-            cat coverage-integration-summary.txt
-            echo ""
-            if [ -f coverage-integration-merged.xml ]; then
-              echo "✓ Generated coverage-integration-merged.xml ($(wc -c < coverage-integration-merged.xml) bytes)"
+              
+              # Generate reports - ensure source code is available
+              echo "Generating coverage reports..."
+              if [ -d "src/api_service" ] || [ -d "aimino_frontend" ]; then
+                coverage xml -o coverage-integration-merged.xml || {
+                  echo "⚠️  coverage xml failed, checking .coverage file..."
+                  if [ -f ".coverage" ]; then
+                    echo "  .coverage exists ($(wc -c < .coverage) bytes)"
+                    coverage xml -o coverage-integration-merged.xml --skip-empty || true
+                  fi
+                }
+                coverage html -d htmlcov-integration || true
+                coverage report --show-missing > coverage-integration-summary.txt 2>&1 || {
+                  echo "⚠️  coverage report failed"
+                  coverage report > coverage-integration-summary.txt 2>&1 || echo "No coverage data" > coverage-integration-summary.txt
+                }
+              else
+                echo "⚠️  Source directories not found, generating reports anyway..."
+                coverage xml -o coverage-integration-merged.xml || true
+                coverage report > coverage-integration-summary.txt 2>&1 || echo "No coverage data" > coverage-integration-summary.txt
+              fi
+              
+              echo ""
+              echo "Integration Tests Coverage Summary:"
+              cat coverage-integration-summary.txt
+              echo ""
+              if [ -f coverage-integration-merged.xml ]; then
+                SIZE=$(wc -c < coverage-integration-merged.xml)
+                echo "✓ Generated coverage-integration-merged.xml ($SIZE bytes)"
+                if [ "$SIZE" -lt 200 ]; then
+                  echo "  ⚠️  File is very small, may be empty"
+                  head -5 coverage-integration-merged.xml
+                fi
+              else
+                echo "⚠️  Failed to generate coverage-integration-merged.xml"
+              fi
             else
-              echo "⚠️  Failed to generate coverage-integration-merged.xml"
+              echo "⚠️  No valid integration coverage files found (all files were empty or too small)"
+              echo "No coverage data available" > coverage-integration-summary.txt
+              echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-integration-merged.xml
+              mkdir -p htmlcov-integration
             fi
           else
             echo "⚠️  No integration coverage data files found"
