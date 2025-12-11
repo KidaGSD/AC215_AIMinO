@@ -137,7 +137,7 @@ jobs:
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-unit
+          name: coverage-data-unit-${{ matrix.python-version }}
           path: |
             .coverage.unit.${{ matrix.python-version }}
             coverage.xml
@@ -201,7 +201,7 @@ jobs:
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-integration
+          name: coverage-data-integration-${{ matrix.python-version }}
           path: |
             .coverage.integration.${{ matrix.python-version }}
             coverage.xml
@@ -332,13 +332,13 @@ jobs:
       - name: Download unit coverage data
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-data-unit
+          pattern: coverage-data-unit-*
           merge-multiple: true
 
       - name: Download integration coverage data
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-data-integration
+          pattern: coverage-data-integration-*
           merge-multiple: true
 
       - name: Merge unit tests coverage
