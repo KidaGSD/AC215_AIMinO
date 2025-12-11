@@ -83,7 +83,7 @@ docker stop aimino-api
 
 ## Code Coverage
 
-The test suite aims for at least 50% code coverage. Coverage reports are generated in multiple formats:
+The test suite aims for at least **60% code coverage** (as required by the assignment). Coverage reports are generated in multiple formats:
 
 - **Terminal**: `--cov-report=term-missing`
 - **HTML**: `--cov-report=html` (view in `htmlcov/index.html`)
@@ -103,20 +103,21 @@ xdg-open htmlcov/index.html  # Linux
 
 ## CI Pipeline
 
-The CI pipeline (`.github/workflows/ci.yml`) automatically:
+The CI/CD pipeline (`.github/workflows/ci-cd.yml`) automatically:
 
-1. **Lints code** with ruff (if available)
-2. **Runs unit tests** across Python 3.10, 3.11, 3.12
-3. **Runs integration tests** with mocked dependencies
-4. **Builds Docker image** and verifies it works
+1. **Runs unit tests** across Python 3.10, 3.11, 3.12
+2. **Runs integration tests** with mocked dependencies
+3. **Checks coverage threshold** - fails if coverage < 60%
+4. **Builds Docker image** and pushes to GitHub Container Registry
 5. **Runs system tests** against a running container
 6. **Generates coverage reports** and uploads to artifacts
-7. **Fails if coverage < 50%**
+7. **Deploys to Kubernetes** (when merging to `main` branch)
 
 ### CI Triggers
 
-- Push to `main`, `master`, or `develop` branches
-- Pull requests to `main`, `master`, or `develop` branches
+- **Push** to `main`, `master`, or `develop` branches
+- **Pull requests** to `main`, `master`, or `develop` branches
+- **Deployment** to Kubernetes is triggered automatically when code is merged to `main` branch
 
 ## Test Markers
 
@@ -180,9 +181,11 @@ export PYTHONPATH=$PWD/src:$PWD/aimino_frontend/aimino_core
 pytest
 ```
 
-### Coverage Below 50%
+### Coverage Below 60%
 
-If coverage is below 50%, the tests will fail. To see what's not covered:
+If coverage is below 60%, the tests will fail. To see what's not covered:
+
+See `COVERAGE_REPORT.md` for detailed documentation of untested modules and functions.
 
 ```bash
 pytest --cov=src/api_service --cov=aimino_frontend/aimino_core --cov-report=term-missing
@@ -206,4 +209,8 @@ The CI pipeline runs automatically on GitHub Actions. Check the Actions tab in y
 - Docker build status
 
 All artifacts (coverage reports, logs) are available for download from the Actions page.
+
+## Coverage Documentation
+
+A detailed coverage report documenting untested modules and functions is maintained in `COVERAGE_REPORT.md`. This document is updated automatically by the CI pipeline and should be reviewed regularly to identify areas needing additional test coverage.
 

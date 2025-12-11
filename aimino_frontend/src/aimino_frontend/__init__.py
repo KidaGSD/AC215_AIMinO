@@ -5,7 +5,7 @@ This package contains the Napari frontend application for AIMinO, including:
 - napari_app: Napari application entry points and agent client
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 __all__ = ["__version__"]
 

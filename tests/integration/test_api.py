@@ -6,6 +6,7 @@ Based on Milestone 4 Final reference implementation
 
 import os
 import pytest
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from api_service.api.service import create_app
@@ -84,6 +85,40 @@ class TestHealthEndpoint:
             assert r.status_code == 200
             assert "application/json" in r.headers["content-type"]
 
+    def test_healthz_with_runner(self):
+        """Test healthz endpoint when runner is initialized."""
+        app = make_app_with_dummies()
+        # Set runner in app.state
+        from unittest.mock import MagicMock
+        app.state.runner = MagicMock()
+        with TestClient(app) as client:
+            r = client.get("/api/v1/healthz")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["runner_initialized"] is True
+            assert "service_version" in data
+
+    def test_healthz_without_runner(self):
+        """Test healthz endpoint when runner is not initialized."""
+        os.environ["AIMINO_SKIP_STARTUP"] = "1"
+        app = create_app()
+        with TestClient(app) as client:
+            r = client.get("/api/v1/healthz")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["runner_initialized"] is False
+
+    def test_healthz_service_version(self):
+        """Test healthz endpoint includes service_version."""
+        app = make_app_with_dummies()
+        with TestClient(app) as client:
+            r = client.get("/api/v1/healthz")
+            assert r.status_code == 200
+            data = r.json()
+            assert "service_version" in data
+            assert "schema_version" in data
+            assert data["schema_version"] == "0.1"
+
 
 @pytest.mark.integration
 class TestInvokeEndpoint:
@@ -114,6 +149,24 @@ class TestInvokeEndpoint:
             data = r.json()
             assert isinstance(data, dict)
 
+    def test_invoke_with_session_id(self):
+        """Test invoke with existing session_id."""
+        app = make_app_with_dummies()
+        with TestClient(app) as client:
+            # First call to create session
+            r1 = client.post(
+                "/api/v1/invoke",
+                json={"user_input": "test", "session_id": "test_session_123"}
+            )
+            assert r1.status_code in (200, 500, 503)
+            
+            # Second call with same session_id (should reuse session)
+            r2 = client.post(
+                "/api/v1/invoke",
+                json={"user_input": "test2", "session_id": "test_session_123"}
+            )
+            assert r2.status_code in (200, 500, 503)
+
     def test_invoke_failure(self):
         """Test invoke endpoint error handling"""
         app = make_app_with_failing_runner()
@@ -132,11 +185,87 @@ class TestInvokeEndpoint:
             # Should reject due to missing user_input
             assert r.status_code == 422
 
+    def test_register_dataset_endpoint(self, monkeypatch):
+        """Test dataset registration endpoint."""
+        import tempfile
+        from pathlib import Path
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.setenv("AIMINO_DATA_ROOT", tmpdir)
+            app = make_app_with_dummies()
+            with TestClient(app) as client:
+                img = Path(tmpdir) / "test.tif"
+                h5 = Path(tmpdir) / "test.h5ad"
+                img.write_bytes(b"tiff")
+                h5.write_bytes(b"h5ad")
+                
+                r = client.post(
+                    "/api/v1/datasets/register",
+                    json={
+                        "image_path": str(img),
+                        "h5ad_path": str(h5),
+                        "dataset_id": "test_dataset",
+                        "copy_files": False,
+                        "marker_col": "SOX10"
+                    }
+                )
+                assert r.status_code == 200
+                data = r.json()
+                assert data["status"] == "ok"
+                assert "manifest" in data
+
+    def test_register_dataset_endpoint_error(self):
+        """Test dataset registration endpoint error handling."""
+        app = make_app_with_dummies()
+        with TestClient(app) as client:
+            r = client.post(
+                "/api/v1/datasets/register",
+                json={
+                    "image_path": "/nonexistent/path.tif",
+                    "h5ad_path": "/nonexistent/path.h5ad",
+                    "dataset_id": "test_error"
+                }
+            )
+            assert r.status_code == 400
+            assert "detail" in r.json()
+
+    def test_register_dataset_without_marker(self, monkeypatch):
+        """Test dataset registration without marker_col."""
+        import tempfile
+        from pathlib import Path
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.setenv("AIMINO_DATA_ROOT", tmpdir)
+            app = make_app_with_dummies()
+            with TestClient(app) as client:
+                img = Path(tmpdir) / "test.tif"
+                h5 = Path(tmpdir) / "test.h5ad"
+                img.write_bytes(b"tiff")
+                h5.write_bytes(b"h5ad")
+                
+                r = client.post(
+                    "/api/v1/datasets/register",
+                    json={
+                        "image_path": str(img),
+                        "h5ad_path": str(h5),
+                        "dataset_id": "test_dataset2",
+                        "copy_files": False
+                    }
+                )
+                assert r.status_code == 200
+                data = r.json()
+                assert data["status"] == "ok"
+
     def test_invoke_runner_not_ready(self):
         """Test invoke when runner is not initialized"""
         os.environ["AIMINO_SKIP_STARTUP"] = "1"
         app = create_app()
-        # Don't set runner in app.state
+        # Don't set runner in app.state - should return 503
+        with TestClient(app) as client:
+            r = client.post("/api/v1/invoke", json={"user_input": "test"})
+            assert r.status_code == 503
+            data = r.json()
+            assert data.get("code") == "runner_not_ready"
         with TestClient(app) as client:
             r = client.post("/api/v1/invoke", json={"user_input": "test"})
             assert r.status_code == 503

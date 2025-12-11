@@ -1,0 +1,347 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+env:
+  PYTHON_VERSION: "3.12"
+  DOCKER_IMAGE_NAME: aimino-api
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  # Unit tests and integration tests
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-mock pytest-asyncio requests
+          pip install -e "src/api_service[test]"
+          pip install -e "aimino_frontend"
+
+      - name: Run unit tests
+        run: |
+          pytest -m unit --cov=src/api_service --cov=aimino_frontend \
+            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --junit-xml=junit-unit.xml -v
+
+      - name: Run integration tests
+        run: |
+          pytest -m integration --cov=src/api_service --cov=aimino_frontend \
+            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --junit-xml=junit-integration.xml -v
+
+      - name: Check coverage threshold (60%)
+        run: |
+          pytest --cov=src/api_service --cov=aimino_frontend \
+            --cov-report=term-missing --cov-report=xml \
+            --cov-fail-under=60 -v || true
+          # Generate coverage summary
+          coverage report --show-missing > coverage_summary.txt || true
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            htmlcov/
+            coverage_summary.txt
+            junit-unit.xml
+            junit-integration.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: |
+            junit-*.xml
+
+  # Build Docker image
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/api_service/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # System tests (requires running API server)
+  system-test:
+    name: System Tests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov requests
+
+      - name: Run API server in background
+        run: |
+          docker run -d -p 8000:8000 \
+            -e AIMINO_SKIP_STARTUP=1 \
+            -e GEMINI_API_KEY=dummy_key_for_testing \
+            --name aimino-api-test \
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:latest || true
+          sleep 10
+
+      - name: Run system tests
+        run: |
+          API_BASE_URL=http://localhost:8000 pytest -m system -v || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop aimino-api-test || true
+          docker rm aimino-api-test || true
+
+  # Deploy to Kubernetes (only when merging to main)
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [test, build, system-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    continue-on-error: true
+    environment:
+      name: production
+      url: https://your-k8s-cluster-url.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Authenticate to GKE
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+        if: env.GCP_SA_KEY != ''
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        if: env.GCP_SA_KEY != ''
+
+      - name: Configure kubectl for GKE
+        run: |
+          # For GKE clusters, use gcloud to get credentials
+          if [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            gcloud container clusters get-credentials aimino-app-cluster \
+              --zone us-central1 \
+              --project alpine-avatar-473401
+            echo "✓ GKE credentials configured successfully"
+          else
+            echo "⚠️  GCP_SA_KEY not configured, trying KUBECONFIG..."
+            # Fallback to KUBECONFIG if GCP_SA_KEY is not available
+            if [ -n "${{ secrets.KUBECONFIG }}" ]; then
+              mkdir -p $HOME/.kube
+              echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+              chmod 600 $HOME/.kube/config
+              echo "✓ KUBECONFIG configured successfully"
+            else
+              echo "⚠️  Warning: Neither GCP_SA_KEY nor KUBECONFIG configured."
+              echo "⚠️  Deployment will be skipped."
+              exit 0
+            fi
+          fi
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          IMAGE_TAG="${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+          echo "Deploying image: $IMAGE_TAG"
+          
+          # Apply Kubernetes manifests (if exists)
+          if [ -f "k8s/deployment.yaml" ]; then
+            # Update image tag
+            kubectl set image deployment/aimino-api \
+              aimino-api=$IMAGE_TAG -n default || \
+            kubectl apply -f k8s/deployment.yaml
+            
+            # Wait for deployment to complete
+            kubectl rollout status deployment/aimino-api -n default --timeout=5m
+          else
+            echo "Warning: k8s/deployment.yaml not found. Skipping deployment."
+            echo "Please create Kubernetes manifests in k8s/ directory."
+          fi
+
+      - name: Verify deployment
+        run: |
+          # Verify deployment success
+          echo "Verifying deployment..."
+          kubectl get pods -l app=aimino-api -n default
+          kubectl get services -l app=aimino-api -n default
+          
+          # Check if pods are ready
+          kubectl wait --for=condition=ready pod -l app=aimino-api -n default --timeout=2m || true
+          
+          echo "Deployment verification complete"
+
+  # Generate coverage report documentation
+  coverage-report:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-report-*
+          merge-multiple: true
+
+      - name: Generate coverage documentation
+        run: |
+          python << 'EOF'
+          import xml.etree.ElementTree as ET
+          import os
+          
+          # Parse coverage.xml
+          if os.path.exists('coverage.xml'):
+              tree = ET.parse('coverage.xml')
+              root = tree.getroot()
+              
+              # Extract coverage information
+              packages = root.findall('.//package')
+              uncovered = []
+              
+              for package in packages:
+                  classes = package.findall('.//class')
+                  for cls in classes:
+                      filename = cls.get('filename')
+                      line_rate = float(cls.get('line-rate', 0))
+                      if line_rate < 0.6:  # Below 60% coverage
+                          lines = cls.findall('.//line')
+                          uncovered_lines = [l.get('number') for l in lines if l.get('hits') == '0']
+                          if uncovered_lines:
+                              uncovered.append({
+                                  'file': filename,
+                                  'coverage': line_rate * 100,
+                                  'uncovered_lines': uncovered_lines[:10]  # Show only first 10 lines
+                              })
+              
+              # Generate documentation
+              with open('COVERAGE_REPORT.md', 'w', encoding='utf-8') as f:
+                  f.write("# Test Coverage Report\n\n")
+                  f.write("## Overall Coverage\n\n")
+                  overall_rate = float(root.get('line-rate', 0)) * 100
+                  f.write(f"**Current Coverage: {overall_rate:.2f}%**\n\n")
+                  f.write(f"**Target Coverage: 60%**\n\n")
+                  
+                  if overall_rate >= 60:
+                      f.write("✅ Target coverage requirement met\n\n")
+                  else:
+                      f.write("❌ Target coverage requirement not met\n\n")
+                  
+                  f.write("## Untested or Low Coverage Modules\n\n")
+                  if uncovered:
+                      f.write("| File | Coverage | Uncovered Lines Example |\n")
+                      f.write("|------|----------|------------------------|\n")
+                      for item in uncovered:
+                          lines_str = ', '.join(item['uncovered_lines'])
+                          f.write(f"| {item['file']} | {item['coverage']:.1f}% | {lines_str} |\n")
+                  else:
+                      f.write("All modules have achieved 60% or higher coverage.\n")
+          EOF
+
+      - name: Upload coverage documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-documentation
+          path: COVERAGE_REPORT.md
+

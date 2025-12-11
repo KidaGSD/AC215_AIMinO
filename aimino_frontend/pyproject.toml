@@ -1,6 +1,6 @@
 [project]
 name = "aimino"
-version = "0.1.0"
+version = "0.1.2"
 description = "AIMinO Napari frontend application with command execution and agent client"
 requires-python = ">=3.10"
 readme = "README.md"

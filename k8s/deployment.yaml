@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aimino-api
+  labels:
+    app: aimino-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aimino-api
+  template:
+    metadata:
+      labels:
+        app: aimino-api
+    spec:
+      containers:
+      - name: aimino-api
+        image: ghcr.io/YOUR_USERNAME/YOUR_REPO/aimino-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aimino-secrets
+              key: gemini-api-key
+        - name: AIMINO_DATA_ROOT
+          value: "/data/aimino"
+        - name: AIMINO_SKIP_STARTUP
+          value: "0"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/healthz
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/v1/healthz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data/aimino
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: aimino-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aimino-api-service
+  labels:
+    app: aimino-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: aimino-api
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aimino-data-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+

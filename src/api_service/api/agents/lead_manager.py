@@ -14,8 +14,8 @@ from google.genai import types
 from typing_extensions import override
 from pydantic import BaseModel, ValidationError
 
-from aimino_core.command_models import BaseCommandAdapter
-from aimino_core.registry import available_actions
+from aimino_frontend.aimino_core.command_models import BaseCommandAdapter
+from aimino_frontend.aimino_core.registry import available_actions
 
 from .workers import get_workers
 from .handbooks import load_text

@@ -1,7 +1,7 @@
 # Napari plugin manifest (npe2)
 name: aimino
 display_name: AIMinO ChatBox
-version: 0.1.0
+version: 0.1.2
 schema_version: 0.1.0
 contributions:
   commands:

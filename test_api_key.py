@@ -4,7 +4,7 @@
 import os
 import sys
 
-# 从 .env 文件读取 API key
+# Read API key from .env file
 from pathlib import Path
 env_file = Path(__file__).parent / ".env"
 if env_file.exists():
@@ -25,22 +25,22 @@ print("正在测试 API key...")
 try:
     import google.genai as genai
     
-    # 尝试配置 API key
+    # Try to configure API key
     if hasattr(genai, "configure"):
         genai.configure(api_key=api_key)
         print("✓ API key 已配置")
     else:
-        # 如果没有 configure 方法，通过环境变量设置
+        # If no configure method, set via environment variable
         os.environ["GOOGLE_API_KEY"] = api_key
         print("✓ 通过环境变量设置 API key")
     
-    # 尝试创建一个简单的请求
+    # Try to create a simple request
     client = genai.Client(api_key=api_key)
     
     print("✓ 成功连接到 Gemini API")
     print("✓ API key 可用！")
     
-    # 尝试一个简单的生成请求
+    # Try a simple generation request
     print("\n正在测试生成请求...")
     response = client.models.generate_content(
         model="gemini-2.0-flash",
