@@ -22,3 +22,7 @@ aimino_frontend/aimino_core/aimino_core.egg-info
 !README.md
 !**/README.md
 !UNTESTED_CODE.md
+
+# 覆盖率文件 - 这些是本地生成的，不应提交到 git
+.coverage
+coverage.xml
