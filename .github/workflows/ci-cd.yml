@@ -484,43 +484,119 @@ jobs:
                 fi
               fi
               
-              # Generate reports - use ignore-errors to handle path mismatches
+              # Generate reports - prioritize using uploaded coverage.xml files
               echo "Generating coverage reports..."
               
               # First, try to find and use uploaded coverage.xml files from artifacts
               XML_FILES=$(find . -path "*/coverage-data-unit-*/coverage.xml" -type f 2>/dev/null | sort)
               if [ -n "$XML_FILES" ]; then
-                echo "Found uploaded coverage.xml files, merging them..."
-                # Use the first XML file as base, or combine if multiple
-                FIRST_XML=$(echo $XML_FILES | cut -d' ' -f1)
-                if [ -f "$FIRST_XML" ]; then
+                echo "✓ Found uploaded coverage.xml files:"
+                for xml in $XML_FILES; do
+                  SIZE=$(stat -f%z "$xml" 2>/dev/null || stat -c%s "$xml" 2>/dev/null || wc -c < "$xml" 2>/dev/null || echo "0")
+                  echo "  $xml: $SIZE bytes"
+                done
+                echo ""
+                
+                # If multiple XML files, we need to merge them
+                XML_COUNT=$(echo $XML_FILES | wc -w | tr -d ' ')
+                if [ "$XML_COUNT" -eq 1 ]; then
+                  # Single XML file, use it directly
+                  FIRST_XML=$(echo $XML_FILES | cut -d' ' -f1)
                   cp "$FIRST_XML" coverage-unit-merged.xml
-                  echo "✓ Using coverage.xml from artifacts: $FIRST_XML"
-                fi
-              else
-                # Try to generate from .coverage file with ignore-errors
-                if [ -f ".coverage" ]; then
-                  echo "Generating XML from .coverage file (ignoring source path errors)..."
-                  coverage xml -o coverage-unit-merged.xml --ignore-errors 2>&1 || {
-                    echo "⚠️  coverage xml failed even with --ignore-errors"
-                    # Try to create a minimal XML if all else fails
-                    echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-unit-merged.xml
-                  }
+                  echo "✓ Using single coverage.xml: $FIRST_XML"
                 else
-                  echo "⚠️  No .coverage file found"
-                  echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-unit-merged.xml
+                  # Multiple XML files, need to merge them
+                  echo "Merging $XML_COUNT coverage.xml files..."
+                  python3 - "$XML_FILES" << 'PYEOF'
+import xml.etree.ElementTree as ET
+import sys
+import glob
+
+xml_files = sys.argv[1].split()
+if not xml_files:
+    print("No XML files to merge")
+    sys.exit(1)
+
+# Parse all XML files and merge
+all_packages = {}
+total_lines = 0
+total_covered = 0
+
+for xml_file in xml_files:
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        line_rate = float(root.get('line-rate', 0))
+        lines_valid = int(root.get('lines-valid', 0))
+        lines_covered = int(root.get('lines-covered', 0))
+        total_lines += lines_valid
+        total_covered += lines_covered
+        for package in root.findall('.//package'):
+            pkg_name = package.get('name', '')
+            if pkg_name not in all_packages:
+                all_packages[pkg_name] = package
+    except Exception as e:
+        print(f"Warning: Failed to parse {xml_file}: {e}")
+
+merged_root = ET.Element('coverage')
+if total_lines > 0:
+    merged_rate = total_covered / total_lines
+else:
+    merged_rate = 0.0
+
+merged_root.set('line-rate', str(merged_rate))
+merged_root.set('branch-rate', '0')
+merged_root.set('lines-covered', str(total_covered))
+merged_root.set('lines-valid', str(total_lines))
+merged_root.set('branches-covered', '0')
+merged_root.set('branches-valid', '0')
+merged_root.set('complexity', '0')
+merged_root.set('version', '7.13.0')
+import time
+merged_root.set('timestamp', str(int(time.time() * 1000)))
+
+ET.SubElement(merged_root, 'sources')
+packages_elem = ET.SubElement(merged_root, 'packages')
+for pkg_name, pkg_elem in all_packages.items():
+    packages_elem.append(pkg_elem)
+
+tree = ET.ElementTree(merged_root)
+tree.write('coverage-unit-merged.xml', encoding='utf-8', xml_declaration=True)
+print(f"✓ Merged {len(xml_files)} XML files")
+print(f"  Coverage: {merged_rate * 100:.2f}%")
+PYEOF
                 fi
+                
+                # Generate summary from merged XML
+                python3 << 'PYEOF'
+import xml.etree.ElementTree as ET
+try:
+    tree = ET.parse('coverage-unit-merged.xml')
+    root = tree.getroot()
+    rate = float(root.get('line-rate', 0)) * 100
+    lines_covered = int(root.get('lines-covered', 0))
+    lines_valid = int(root.get('lines-valid', 0))
+    with open('coverage-unit-summary.txt', 'w') as f:
+        f.write(f"Unit Tests Coverage: {rate:.2f}%\n")
+        f.write(f"Lines covered: {lines_covered}/{lines_valid}\n")
+    print(f"✓ Generated summary: {rate:.2f}% coverage")
+except Exception as e:
+    print(f"⚠️  Failed to generate summary: {e}")
+    with open('coverage-unit-summary.txt', 'w') as f:
+        f.write("No coverage data available\n")
+PYEOF
+              else
+                echo "⚠️  No coverage.xml files found in artifacts"
+                echo "⚠️  .coverage file contains local paths and cannot be used in CI"
+                echo "No coverage data available" > coverage-unit-summary.txt
+                echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-unit-merged.xml
               fi
               
-              # Generate HTML and text reports
-              if [ -f ".coverage" ]; then
+              # Generate HTML report if possible
+              if [ -f "coverage-unit-merged.xml" ] && [ -f ".coverage" ]; then
                 coverage html -d htmlcov-unit --ignore-errors || true
-                coverage report --show-missing --ignore-errors > coverage-unit-summary.txt 2>&1 || {
-                  echo "⚠️  coverage report failed, trying without --show-missing..."
-                  coverage report --ignore-errors > coverage-unit-summary.txt 2>&1 || echo "No coverage data" > coverage-unit-summary.txt
-                }
               else
-                echo "No coverage data available" > coverage-unit-summary.txt
+                mkdir -p htmlcov-unit
               fi
               
               echo ""
@@ -650,43 +726,117 @@ jobs:
                 fi
               fi
               
-              # Generate reports - use ignore-errors to handle path mismatches
+              # Generate reports - prioritize using uploaded coverage.xml files
               echo "Generating coverage reports..."
               
               # First, try to find and use uploaded coverage.xml files from artifacts
               XML_FILES=$(find . -path "*/coverage-data-integration-*/coverage.xml" -type f 2>/dev/null | sort)
               if [ -n "$XML_FILES" ]; then
-                echo "Found uploaded coverage.xml files, merging them..."
-                # Use the first XML file as base, or combine if multiple
-                FIRST_XML=$(echo $XML_FILES | cut -d' ' -f1)
-                if [ -f "$FIRST_XML" ]; then
+                echo "✓ Found uploaded coverage.xml files:"
+                for xml in $XML_FILES; do
+                  SIZE=$(stat -f%z "$xml" 2>/dev/null || stat -c%s "$xml" 2>/dev/null || wc -c < "$xml" 2>/dev/null || echo "0")
+                  echo "  $xml: $SIZE bytes"
+                done
+                echo ""
+                
+                # If multiple XML files, we need to merge them
+                XML_COUNT=$(echo $XML_FILES | wc -w | tr -d ' ')
+                if [ "$XML_COUNT" -eq 1 ]; then
+                  # Single XML file, use it directly
+                  FIRST_XML=$(echo $XML_FILES | cut -d' ' -f1)
                   cp "$FIRST_XML" coverage-integration-merged.xml
-                  echo "✓ Using coverage.xml from artifacts: $FIRST_XML"
-                fi
-              else
-                # Try to generate from .coverage file with ignore-errors
-                if [ -f ".coverage" ]; then
-                  echo "Generating XML from .coverage file (ignoring source path errors)..."
-                  coverage xml -o coverage-integration-merged.xml --ignore-errors 2>&1 || {
-                    echo "⚠️  coverage xml failed even with --ignore-errors"
-                    # Try to create a minimal XML if all else fails
-                    echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-integration-merged.xml
-                  }
+                  echo "✓ Using single coverage.xml: $FIRST_XML"
                 else
-                  echo "⚠️  No .coverage file found"
-                  echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-integration-merged.xml
+                  # Multiple XML files, need to merge them
+                  echo "Merging $XML_COUNT coverage.xml files..."
+                  python3 - "$XML_FILES" << 'PYEOF'
+import xml.etree.ElementTree as ET
+import sys
+import time
+
+xml_files = sys.argv[1].split()
+if not xml_files:
+    print("No XML files to merge")
+    sys.exit(1)
+
+all_packages = {}
+total_lines = 0
+total_covered = 0
+
+for xml_file in xml_files:
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        line_rate = float(root.get('line-rate', 0))
+        lines_valid = int(root.get('lines-valid', 0))
+        lines_covered = int(root.get('lines-covered', 0))
+        total_lines += lines_valid
+        total_covered += lines_covered
+        for package in root.findall('.//package'):
+            pkg_name = package.get('name', '')
+            if pkg_name not in all_packages:
+                all_packages[pkg_name] = package
+    except Exception as e:
+        print(f"Warning: Failed to parse {xml_file}: {e}")
+
+merged_root = ET.Element('coverage')
+if total_lines > 0:
+    merged_rate = total_covered / total_lines
+else:
+    merged_rate = 0.0
+
+merged_root.set('line-rate', str(merged_rate))
+merged_root.set('branch-rate', '0')
+merged_root.set('lines-covered', str(total_covered))
+merged_root.set('lines-valid', str(total_lines))
+merged_root.set('branches-covered', '0')
+merged_root.set('branches-valid', '0')
+merged_root.set('complexity', '0')
+merged_root.set('version', '7.13.0')
+merged_root.set('timestamp', str(int(time.time() * 1000)))
+
+ET.SubElement(merged_root, 'sources')
+packages_elem = ET.SubElement(merged_root, 'packages')
+for pkg_name, pkg_elem in all_packages.items():
+    packages_elem.append(pkg_elem)
+
+tree = ET.ElementTree(merged_root)
+tree.write('coverage-integration-merged.xml', encoding='utf-8', xml_declaration=True)
+print(f"✓ Merged {len(xml_files)} XML files")
+print(f"  Coverage: {merged_rate * 100:.2f}%")
+PYEOF
                 fi
+                
+                # Generate summary from merged XML
+                python3 << 'PYEOF'
+import xml.etree.ElementTree as ET
+try:
+    tree = ET.parse('coverage-integration-merged.xml')
+    root = tree.getroot()
+    rate = float(root.get('line-rate', 0)) * 100
+    lines_covered = int(root.get('lines-covered', 0))
+    lines_valid = int(root.get('lines-valid', 0))
+    with open('coverage-integration-summary.txt', 'w') as f:
+        f.write(f"Integration Tests Coverage: {rate:.2f}%\n")
+        f.write(f"Lines covered: {lines_covered}/{lines_valid}\n")
+    print(f"✓ Generated summary: {rate:.2f}% coverage")
+except Exception as e:
+    print(f"⚠️  Failed to generate summary: {e}")
+    with open('coverage-integration-summary.txt', 'w') as f:
+        f.write("No coverage data available\n")
+PYEOF
+              else
+                echo "⚠️  No coverage.xml files found in artifacts"
+                echo "⚠️  .coverage file contains local paths and cannot be used in CI"
+                echo "No coverage data available" > coverage-integration-summary.txt
+                echo '<?xml version="1.0" ?><coverage line-rate="0" branch-rate="0" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="0" version="0" timestamp="0"><sources/><packages/></coverage>' > coverage-integration-merged.xml
               fi
               
-              # Generate HTML and text reports
-              if [ -f ".coverage" ]; then
+              # Generate HTML report if possible
+              if [ -f "coverage-integration-merged.xml" ] && [ -f ".coverage" ]; then
                 coverage html -d htmlcov-integration --ignore-errors || true
-                coverage report --show-missing --ignore-errors > coverage-integration-summary.txt 2>&1 || {
-                  echo "⚠️  coverage report failed, trying without --show-missing..."
-                  coverage report --ignore-errors > coverage-integration-summary.txt 2>&1 || echo "No coverage data" > coverage-integration-summary.txt
-                }
               else
-                echo "No coverage data available" > coverage-integration-summary.txt
+                mkdir -p htmlcov-integration
               fi
               
               echo ""
