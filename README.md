@@ -70,7 +70,7 @@ docker run --rm -d -p 8000:8000 --name aimino-api --env-file .env aimino-api:dev
 
 ```
 
-### 4. Start Frontend
+### 4. Start the Frontend
 
 ```bash
 # Launch Napari
