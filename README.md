@@ -130,7 +130,7 @@ napari
 
 ## Known Issues & Mitigations
 - **Large images (>16k pixels per axis)**: Napari/VisPy will downsample and may freeze. Use a downsampled/pyramidal copy (OME-Zarr or pyramidal OME-TIFF) for visualization; point `manifest.json` `image_path` to the multiscale asset.
-- **Huge files**: auto-load skips when size > `AIMINO_AUTLOAD_MAX_BYTES`. Adjust via `.env` or shell. Forcing load can still be slow; prefer multiscale data.
+- **Huge files**: auto-load skips when size > `AIMINO_AUTLOAD_MAX_BYTES`. Adjust via `.env` or shell. Forcing load can still be slow; prefer multiscale data. 1
 - **Backend threads for heavy loads**: current Napari handlers run on the main thread. For very large data, precompute/crop or convert to multiscale. (Planned: background load + progress UI.)
 
 ## Recommendations for Large Datasets
