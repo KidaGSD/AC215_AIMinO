@@ -18,87 +18,10 @@ env:
   DOCKER_REGISTRY: ghcr.io
 
 jobs:
-  # Unit tests and integration tests
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgl1-mesa-glx libglib2.0-0
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-cov pytest-mock pytest-asyncio requests
-          pip install -e "src/api_service[test]"
-          pip install -e "aimino_frontend"
-
-      - name: Run unit tests
-        run: |
-          pytest -m unit --cov=src/api_service --cov=aimino_frontend \
-            --cov-report=term-missing --cov-report=xml --cov-report=html \
-            --junit-xml=junit-unit.xml -v
-
-      - name: Run integration tests
-        run: |
-          pytest -m integration --cov=src/api_service --cov=aimino_frontend \
-            --cov-report=term-missing --cov-report=xml --cov-report=html \
-            --junit-xml=junit-integration.xml -v
-
-      - name: Check coverage threshold (60%)
-        run: |
-          pytest --cov=src/api_service --cov=aimino_frontend \
-            --cov-report=term-missing --cov-report=xml \
-            --cov-fail-under=60 -v || true
-          # Generate coverage summary
-          coverage report --show-missing > coverage_summary.txt || true
-
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-${{ matrix.python-version }}
-          path: |
-            coverage.xml
-            htmlcov/
-            coverage_summary.txt
-            junit-unit.xml
-            junit-integration.xml
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ matrix.python-version }}
-          path: |
-            junit-*.xml
-
-  # Build Docker image
+  # Step 1: Build Docker Image (first step, all other jobs depend on this)
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: test
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
@@ -142,8 +65,130 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # System tests (requires running API server)
-  system-test:
+  # Step 2: Parallel jobs - Tests and Lint/Format
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-mock pytest-asyncio requests
+          pip install -e "src/api_service[test]"
+          pip install -e "aimino_frontend"
+
+      - name: Run unit tests
+        run: |
+          pytest -m unit --cov=src/api_service --cov=aimino_frontend \
+            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --junit-xml=junit-unit-${{ matrix.python-version }}.xml -v
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            htmlcov/
+            junit-unit-${{ matrix.python-version }}.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-unit-${{ matrix.python-version }}
+          path: junit-unit-${{ matrix.python-version }}.xml
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-mock pytest-asyncio requests
+          pip install -e "src/api_service[test]"
+          pip install -e "aimino_frontend"
+
+      - name: Run integration tests
+        run: |
+          pytest -m integration --cov=src/api_service --cov=aimino_frontend \
+            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --junit-xml=junit-integration-${{ matrix.python-version }}.xml -v \
+            --cov-append
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            htmlcov/
+            junit-integration-${{ matrix.python-version }}.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-integration-${{ matrix.python-version }}
+          path: junit-integration-${{ matrix.python-version }}.xml
+
+  # System Tests (requires Docker image)
+  system-tests:
     name: System Tests
     runs-on: ubuntu-latest
     needs: build
@@ -174,7 +219,14 @@ jobs:
 
       - name: Run system tests
         run: |
-          API_BASE_URL=http://localhost:8000 pytest -m system -v || true
+          API_BASE_URL=http://localhost:8000 pytest -m system -v --junit-xml=junit-system.xml || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-system
+          path: junit-system.xml
 
       - name: Cleanup
         if: always()
@@ -182,12 +234,132 @@ jobs:
           docker stop aimino-api-test || true
           docker rm aimino-api-test || true
 
-  # Deploy to Kubernetes (only when merging to main)
+  # Lint and Format Check (runs in parallel with tests)
+  lint-and-format:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black
+
+      - name: Run Ruff linter
+        run: |
+          ruff check src/api_service/ aimino_frontend/ || true
+        continue-on-error: true
+
+      - name: Run Black formatter check
+        run: |
+          black --check --line-length 120 src/api_service/ aimino_frontend/ || true
+        continue-on-error: true
+
+  # Step 3: Test Summary (aggregates all test results)
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, system-tests, lint-and-format]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Check coverage threshold
+        run: |
+          # Try to merge coverage reports if available
+          if [ -f coverage.xml ]; then
+            python -m pip install --upgrade pip
+            pip install coverage
+            coverage report --show-missing > coverage_summary.txt || true
+            # Check if coverage meets threshold (61%)
+            python << 'EOF'
+          import xml.etree.ElementTree as ET
+          import sys
+          
+          try:
+              tree = ET.parse('coverage.xml')
+              root = tree.getroot()
+              overall_rate = float(root.get('line-rate', 0)) * 100
+              print(f"Coverage: {overall_rate:.2f}%")
+              
+              if overall_rate < 61:
+                  print(f"❌ Coverage {overall_rate:.2f}% is below 61% threshold")
+                  sys.exit(1)
+              else:
+                  print(f"✅ Coverage {overall_rate:.2f}% meets 61% threshold")
+          except Exception as e:
+              print(f"⚠️  Error checking coverage: {e}")
+              sys.exit(0)
+          EOF
+          else
+            echo "⚠️  Coverage report not found, skipping threshold check"
+          fi
+        continue-on-error: true
+
+      - name: Generate test summary
+        run: |
+          echo "### CI/CD Pipeline Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| System Tests | ${{ needs.system-tests.result == 'success' && '✅ Passed' || needs.system-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint and Format | ${{ needs.lint-and-format.result == 'success' && '✅ Passed' || '⚠️ Warnings' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage reports are available in the artifacts above." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload merged coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-final
+          path: |
+            coverage.xml
+            htmlcov/
+            coverage_summary.txt
+        continue-on-error: true
+
+      - name: Check overall test status
+        run: |
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.integration-tests.result }}" != "success" ] || \
+             ([ "${{ needs.system-tests.result }}" != "success" ] && [ "${{ needs.system-tests.result }}" != "skipped" ]); then
+            echo "❌ Some tests failed!"
+            exit 1
+          else
+            echo "✅ All tests passed!"
+          fi
+
+  # Step 4: Deploy to Kubernetes (only when merging to main)
   deploy:
     name: Deploy to Kubernetes
     runs-on: ubuntu-latest
-    needs: [test, build, system-test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test-summary]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.test-summary.result == 'success'
     continue-on-error: true
     environment:
       name: production
@@ -272,7 +444,7 @@ jobs:
   coverage-report:
     name: Generate Coverage Report
     runs-on: ubuntu-latest
-    needs: test
+    needs: test-summary
     if: always()
     
     steps:
@@ -282,7 +454,7 @@ jobs:
       - name: Download coverage artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-report-*
+          pattern: coverage-*
           merge-multiple: true
 
       - name: Generate coverage documentation
@@ -305,7 +477,7 @@ jobs:
                   for cls in classes:
                       filename = cls.get('filename')
                       line_rate = float(cls.get('line-rate', 0))
-                      if line_rate < 0.6:  # Below 60% coverage
+                      if line_rate < 0.61:  # Below 61% coverage
                           lines = cls.findall('.//line')
                           uncovered_lines = [l.get('number') for l in lines if l.get('hits') == '0']
                           if uncovered_lines:
@@ -321,9 +493,9 @@ jobs:
                   f.write("## Overall Coverage\n\n")
                   overall_rate = float(root.get('line-rate', 0)) * 100
                   f.write(f"**Current Coverage: {overall_rate:.2f}%**\n\n")
-                  f.write(f"**Target Coverage: 60%**\n\n")
+                  f.write(f"**Target Coverage: 61%**\n\n")
                   
-                  if overall_rate >= 60:
+                  if overall_rate >= 61:
                       f.write("✅ Target coverage requirement met\n\n")
                   else:
                       f.write("❌ Target coverage requirement not met\n\n")
@@ -336,7 +508,7 @@ jobs:
                           lines_str = ', '.join(item['uncovered_lines'])
                           f.write(f"| {item['file']} | {item['coverage']:.1f}% | {lines_str} |\n")
                   else:
-                      f.write("All modules have achieved 60% or higher coverage.\n")
+                      f.write("All modules have achieved 61% or higher coverage.\n")
           EOF
 
       - name: Upload coverage documentation
@@ -344,4 +516,3 @@ jobs:
         with:
           name: coverage-documentation
           path: COVERAGE_REPORT.md
-
