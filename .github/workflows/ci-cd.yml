@@ -79,7 +79,8 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           # Try to push, but don't fail the job if it fails due to permissions
-          for tag in ${{ steps.meta.outputs.tags }}; do
+          tags="${{ steps.meta.outputs.tags }}"
+          for tag in $tags; do
             docker push "$tag" || echo "⚠️ Failed to push $tag (likely permission issue), continuing..."
           done
         continue-on-error: true
