@@ -507,11 +507,16 @@ jobs:
                 else
                   # Multiple XML files, need to merge them
                   echo "Merging $XML_COUNT coverage.xml files..."
-                  XML_FILES="$XML_FILES" OUTPUT_FILE="coverage-unit-merged.xml" python3 .github/scripts/merge_coverage.py
+                  export XML_FILES="$XML_FILES"
+                  export OUTPUT_FILE="coverage-unit-merged.xml"
+                  python3 .github/scripts/merge_coverage.py
                 fi
                 
                 # Generate summary from merged XML
-                COVERAGE_XML="coverage-unit-merged.xml" SUMMARY_FILE="coverage-unit-summary.txt" TEST_TYPE="Unit Tests" python3 .github/scripts/generate_coverage_summary.py
+                export COVERAGE_XML="coverage-unit-merged.xml"
+                export SUMMARY_FILE="coverage-unit-summary.txt"
+                export TEST_TYPE="Unit Tests"
+                python3 .github/scripts/generate_coverage_summary.py
               else
                 echo "⚠️  No coverage.xml files found in artifacts"
                 echo "⚠️  .coverage file contains local paths and cannot be used in CI"
@@ -676,11 +681,16 @@ jobs:
                 else
                   # Multiple XML files, need to merge them
                   echo "Merging $XML_COUNT coverage.xml files..."
-                  XML_FILES="$XML_FILES" OUTPUT_FILE="coverage-integration-merged.xml" python3 .github/scripts/merge_coverage.py
+                  export XML_FILES="$XML_FILES"
+                  export OUTPUT_FILE="coverage-integration-merged.xml"
+                  python3 .github/scripts/merge_coverage.py
                 fi
                 
                 # Generate summary from merged XML
-                COVERAGE_XML="coverage-integration-merged.xml" SUMMARY_FILE="coverage-integration-summary.txt" TEST_TYPE="Integration Tests" python3 .github/scripts/generate_coverage_summary.py
+                export COVERAGE_XML="coverage-integration-merged.xml"
+                export SUMMARY_FILE="coverage-integration-summary.txt"
+                export TEST_TYPE="Integration Tests"
+                python3 .github/scripts/generate_coverage_summary.py
               else
                 echo "⚠️  No coverage.xml files found in artifacts"
                 echo "⚠️  .coverage file contains local paths and cannot be used in CI"
