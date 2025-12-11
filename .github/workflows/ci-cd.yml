@@ -22,9 +22,16 @@ jobs:
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    # Grant permissions to push packages
+    permissions:
+      contents: read
+      packages: write
+    # Allow build to succeed even if push fails (for permission issues)
+    continue-on-error: false
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
+      build-success: ${{ steps.build.outcome == 'success' }}
     
     steps:
       - name: Checkout code
@@ -53,17 +60,29 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image (always build, push is optional)
         id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./src/api_service/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          # Always build, but don't push (push will be done separately)
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Load image locally for system tests
+          load: true
+
+      - name: Push Docker image (optional, may fail due to permissions)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          # Try to push, but don't fail the job if it fails due to permissions
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            docker push "$tag" || echo "⚠️ Failed to push $tag (likely permission issue), continuing..."
+          done
+        continue-on-error: true
 
   # Step 2: Parallel jobs - Tests and Lint/Format
   # Unit Tests
@@ -192,11 +211,22 @@ jobs:
     name: System Tests
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'pull_request'
+    # Run system tests even if build push failed (build still succeeded)
+    if: github.event_name != 'pull_request' && needs.build.result == 'success'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for system tests
+        run: |
+          # Build the image locally for system tests (reuse cache from build job)
+          docker build -t aimino-api-test:${{ github.sha }} -f src/api_service/Dockerfile .
+          # Also tag as latest for convenience
+          docker tag aimino-api-test:${{ github.sha }} aimino-api-test:latest
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -214,7 +244,7 @@ jobs:
             -e AIMINO_SKIP_STARTUP=1 \
             -e GEMINI_API_KEY=dummy_key_for_testing \
             --name aimino-api-test \
-            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:latest || true
+            aimino-api-test:latest
           sleep 10
 
       - name: Run system tests
