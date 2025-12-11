@@ -454,16 +454,33 @@ jobs:
             fi
             
             if [ -n "$VALID_FILES" ]; then
-              # Try to combine all valid files
-              echo "Attempting to combine coverage files..."
-              if coverage combine $VALID_FILES 2>&1; then
-                echo "✓ Successfully combined coverage files"
-              else
-                echo "⚠️  coverage combine failed, using first valid file..."
+              # Count number of files
+              FILE_COUNT=$(echo $VALID_FILES | wc -w | tr -d ' ')
+              
+              if [ "$FILE_COUNT" -eq 1 ]; then
+                # Only one file, use it directly
                 FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
-                if [ -f "$FIRST_FILE" ]; then
+                echo "Only one coverage file found, using it directly: $FIRST_FILE"
+                if [ "$FIRST_FILE" != ".coverage" ]; then
                   cp "$FIRST_FILE" .coverage
-                  echo "Using single file: $FIRST_FILE"
+                  echo "✓ Copied $FIRST_FILE to .coverage"
+                else
+                  echo "✓ File is already .coverage, using it directly"
+                fi
+              else
+                # Multiple files, try to combine them
+                echo "Attempting to combine $FILE_COUNT coverage files..."
+                if coverage combine $VALID_FILES 2>&1; then
+                  echo "✓ Successfully combined coverage files"
+                else
+                  echo "⚠️  coverage combine failed, using first valid file..."
+                  FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
+                  if [ -f "$FIRST_FILE" ] && [ "$FIRST_FILE" != ".coverage" ]; then
+                    cp "$FIRST_FILE" .coverage
+                    echo "Using single file: $FIRST_FILE"
+                  elif [ -f "$FIRST_FILE" ] && [ "$FIRST_FILE" = ".coverage" ]; then
+                    echo "Using existing .coverage file"
+                  fi
                 fi
               fi
               
@@ -585,16 +602,33 @@ jobs:
             fi
             
             if [ -n "$VALID_FILES" ]; then
-              # Try to combine all valid files
-              echo "Attempting to combine coverage files..."
-              if coverage combine $VALID_FILES 2>&1; then
-                echo "✓ Successfully combined coverage files"
-              else
-                echo "⚠️  coverage combine failed, using first valid file..."
+              # Count number of files
+              FILE_COUNT=$(echo $VALID_FILES | wc -w | tr -d ' ')
+              
+              if [ "$FILE_COUNT" -eq 1 ]; then
+                # Only one file, use it directly
                 FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
-                if [ -f "$FIRST_FILE" ]; then
+                echo "Only one coverage file found, using it directly: $FIRST_FILE"
+                if [ "$FIRST_FILE" != ".coverage" ]; then
                   cp "$FIRST_FILE" .coverage
-                  echo "Using single file: $FIRST_FILE"
+                  echo "✓ Copied $FIRST_FILE to .coverage"
+                else
+                  echo "✓ File is already .coverage, using it directly"
+                fi
+              else
+                # Multiple files, try to combine them
+                echo "Attempting to combine $FILE_COUNT coverage files..."
+                if coverage combine $VALID_FILES 2>&1; then
+                  echo "✓ Successfully combined coverage files"
+                else
+                  echo "⚠️  coverage combine failed, using first valid file..."
+                  FIRST_FILE=$(echo $VALID_FILES | cut -d' ' -f1)
+                  if [ -f "$FIRST_FILE" ] && [ "$FIRST_FILE" != ".coverage" ]; then
+                    cp "$FIRST_FILE" .coverage
+                    echo "Using single file: $FIRST_FILE"
+                  elif [ -f "$FIRST_FILE" ] && [ "$FIRST_FILE" = ".coverage" ]; then
+                    echo "Using existing .coverage file"
+                  fi
                 fi
               fi
               
