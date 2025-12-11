@@ -17,7 +17,8 @@ aimino_frontend/aimino_core/aimino_core.egg-info
 **/__pycache__/
 *.egg-info/
 
-# 忽略所有说明文档，但保留 README 文件
+# 忽略所有说明文档，但保留 README 文件和重要的文档
 *.md
 !README.md
 !**/README.md
+!UNTESTED_CODE.md
