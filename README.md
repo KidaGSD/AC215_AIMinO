@@ -133,7 +133,7 @@ napari
 - **Huge files**: auto-load skips when size > `AIMINO_AUTLOAD_MAX_BYTES`. Adjust via `.env` or shell. Forcing load can still be slow; prefer multiscale data. 1
 - **Backend threads for heavy loads**: current Napari handlers run on the main thread. For very large data, precompute/crop or convert to multiscale. (Planned: background load + progress UI.)
 
-## Recommendations for Large Datasets
+## Recommendations for Large Datasets1
 1) Convert raw TIFF to multiscale (preferred):
    - OME-Zarr pyramid: write multiscale and set `manifest["image_path"]` to the `.zarr` directory.
    - Pyramidal OME-TIFF (SubIFD levels).
