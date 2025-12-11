@@ -127,19 +127,20 @@ jobs:
       - name: Run unit tests
         run: |
           pytest -m unit --cov=src/api_service --cov=aimino_frontend \
-            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --cov-report=term-missing --cov-report=xml \
             --junit-xml=junit-unit-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
+            --cov-data-file=.coverage.unit.${{ matrix.python-version }} \
             -v
 
-      - name: Upload coverage reports
+      - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-unit-${{ matrix.python-version }}
+          name: coverage-data-unit
           path: |
+            .coverage.unit.${{ matrix.python-version }}
             coverage.xml
-            htmlcov/
-            junit-unit-${{ matrix.python-version }}.xml
+          retention-days: 1
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -147,6 +148,63 @@ jobs:
         with:
           name: test-results-unit-${{ matrix.python-version }}
           path: junit-unit-${{ matrix.python-version }}.xml
+
+  # Merge Unit Tests Coverage
+  merge-unit-coverage:
+    name: Merge Unit Tests Coverage
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install coverage pytest-cov
+
+      - name: Download all unit coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-unit
+          merge-multiple: true
+
+      - name: Merge unit coverage reports
+        run: |
+          # List downloaded files for debugging
+          ls -la .coverage.unit.* 2>/dev/null || echo "No .coverage.unit.* files found"
+          # Combine all .coverage files
+          if ls .coverage.unit.* 1> /dev/null 2>&1; then
+            coverage combine .coverage.unit.*
+            # Generate merged reports
+            coverage xml -o coverage-unit-merged.xml
+            coverage html -d htmlcov-unit
+            coverage report --show-missing > coverage-unit-summary.txt
+            echo "Unit Tests Coverage Summary:"
+            cat coverage-unit-summary.txt
+          else
+            echo "⚠️  No coverage data files found, skipping merge"
+            # Create empty reports
+            touch coverage-unit-merged.xml coverage-unit-summary.txt
+            mkdir -p htmlcov-unit
+          fi
+
+      - name: Upload merged unit coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-unit
+          path: |
+            coverage-unit-merged.xml
+            htmlcov-unit/
+            coverage-unit-summary.txt
+          retention-days: 7
 
   # Integration Tests
   integration-tests:
@@ -189,19 +247,20 @@ jobs:
       - name: Run integration tests
         run: |
           pytest -m integration --cov=src/api_service --cov=aimino_frontend \
-            --cov-report=term-missing --cov-report=xml --cov-report=html \
+            --cov-report=term-missing --cov-report=xml \
             --junit-xml=junit-integration-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
-            --cov-append -v
+            --cov-data-file=.coverage.integration.${{ matrix.python-version }} \
+            -v
 
-      - name: Upload coverage reports
+      - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-integration-${{ matrix.python-version }}
+          name: coverage-data-integration
           path: |
+            .coverage.integration.${{ matrix.python-version }}
             coverage.xml
-            htmlcov/
-            junit-integration-${{ matrix.python-version }}.xml
+          retention-days: 1
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -209,6 +268,63 @@ jobs:
         with:
           name: test-results-integration-${{ matrix.python-version }}
           path: junit-integration-${{ matrix.python-version }}.xml
+
+  # Merge Integration Tests Coverage
+  merge-integration-coverage:
+    name: Merge Integration Tests Coverage
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install coverage pytest-cov
+
+      - name: Download all integration coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-integration
+          merge-multiple: true
+
+      - name: Merge integration coverage reports
+        run: |
+          # List downloaded files for debugging
+          ls -la .coverage.integration.* 2>/dev/null || echo "No .coverage.integration.* files found"
+          # Combine all .coverage files
+          if ls .coverage.integration.* 1> /dev/null 2>&1; then
+            coverage combine .coverage.integration.*
+            # Generate merged reports
+            coverage xml -o coverage-integration-merged.xml
+            coverage html -d htmlcov-integration
+            coverage report --show-missing > coverage-integration-summary.txt
+            echo "Integration Tests Coverage Summary:"
+            cat coverage-integration-summary.txt
+          else
+            echo "⚠️  No coverage data files found, skipping merge"
+            # Create empty reports
+            touch coverage-integration-merged.xml coverage-integration-summary.txt
+            mkdir -p htmlcov-integration
+          fi
+
+      - name: Upload merged integration coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-integration
+          path: |
+            coverage-integration-merged.xml
+            htmlcov-integration/
+            coverage-integration-summary.txt
+          retention-days: 7
 
   # System Tests (requires Docker image)
   system-tests:
@@ -302,7 +418,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, system-tests, lint-and-format]
+    needs: [unit-tests, integration-tests, system-tests, lint-and-format, merge-unit-coverage, merge-integration-coverage]
     if: always()
     
     steps:
@@ -315,41 +431,83 @@ jobs:
           pattern: test-results-*
           merge-multiple: true
 
-      - name: Download coverage reports
+      - name: Download merged coverage reports
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-*
+          pattern: coverage-report-*
           merge-multiple: true
 
       - name: Check coverage threshold
         run: |
-          # Try to merge coverage reports if available
-          if [ -f coverage.xml ]; then
-            python -m pip install --upgrade pip
-            pip install coverage
-            coverage report --show-missing > coverage_summary.txt || true
-            # Check if coverage meets threshold (61%)
+          python -m pip install --upgrade pip
+          pip install coverage
+          
+          # Combine unit and integration coverage if both exist
+          if [ -f coverage-unit-merged.xml ] && [ -f coverage-integration-merged.xml ]; then
+            # Parse both XML files and calculate combined coverage
             python << 'EOF'
           import xml.etree.ElementTree as ET
           import sys
           
           try:
-              tree = ET.parse('coverage.xml')
-              root = tree.getroot()
-              overall_rate = float(root.get('line-rate', 0)) * 100
-              print(f"Coverage: {overall_rate:.2f}%")
+              # Parse unit tests coverage
+              unit_tree = ET.parse('coverage-unit-merged.xml')
+              unit_root = unit_tree.getroot()
+              unit_rate = float(unit_root.get('line-rate', 0))
               
-              if overall_rate < 61:
-                  print(f"❌ Coverage {overall_rate:.2f}% is below 61% threshold")
+              # Parse integration tests coverage
+              int_tree = ET.parse('coverage-integration-merged.xml')
+              int_root = int_tree.getroot()
+              int_rate = float(int_root.get('line-rate', 0))
+              
+              # Calculate combined coverage (simple average for now)
+              # In practice, you might want to merge the actual coverage data
+              combined_rate = (unit_rate + int_rate) / 2 * 100
+              print(f"Unit Tests Coverage: {unit_rate * 100:.2f}%")
+              print(f"Integration Tests Coverage: {int_rate * 100:.2f}%")
+              print(f"Combined Coverage: {combined_rate:.2f}%")
+              
+              if combined_rate < 61:
+                  print(f"❌ Combined coverage {combined_rate:.2f}% is below 61% threshold")
                   sys.exit(1)
               else:
-                  print(f"✅ Coverage {overall_rate:.2f}% meets 61% threshold")
+                  print(f"✅ Combined coverage {combined_rate:.2f}% meets 61% threshold")
           except Exception as e:
               print(f"⚠️  Error checking coverage: {e}")
+              import traceback
+              traceback.print_exc()
               sys.exit(0)
           EOF
+          elif [ -f coverage-unit-merged.xml ]; then
+            python << 'EOF'
+          import xml.etree.ElementTree as ET
+          import sys
+          tree = ET.parse('coverage-unit-merged.xml')
+          root = tree.getroot()
+          rate = float(root.get('line-rate', 0)) * 100
+          print(f"Unit Tests Coverage: {rate:.2f}%")
+          if rate < 61:
+              print(f"❌ Coverage {rate:.2f}% is below 61% threshold")
+              sys.exit(1)
+          else:
+              print(f"✅ Coverage {rate:.2f}% meets 61% threshold")
+          EOF
+          elif [ -f coverage-integration-merged.xml ]; then
+            python << 'EOF'
+          import xml.etree.ElementTree as ET
+          import sys
+          tree = ET.parse('coverage-integration-merged.xml')
+          root = tree.getroot()
+          rate = float(root.get('line-rate', 0)) * 100
+          print(f"Integration Tests Coverage: {rate:.2f}%")
+          if rate < 61:
+              print(f"❌ Coverage {rate:.2f}% is below 61% threshold")
+              sys.exit(1)
+          else:
+              print(f"✅ Coverage {rate:.2f}% meets 61% threshold")
+          EOF
           else
-            echo "⚠️  Coverage report not found, skipping threshold check"
+            echo "⚠️  Coverage reports not found, skipping threshold check"
           fi
         continue-on-error: true
 
@@ -366,15 +524,18 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Coverage reports are available in the artifacts above." >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload merged coverage report
+      - name: Upload final coverage summary
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report-final
           path: |
-            coverage.xml
-            htmlcov/
-            coverage_summary.txt
+            coverage-unit-merged.xml
+            coverage-integration-merged.xml
+            htmlcov-unit/
+            htmlcov-integration/
+            coverage-unit-summary.txt
+            coverage-integration-summary.txt
         continue-on-error: true
 
       - name: Check overall test status
