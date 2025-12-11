@@ -125,12 +125,13 @@ jobs:
           pip install -e "aimino_frontend"
 
       - name: Run unit tests
+        env:
+          COVERAGE_FILE: .coverage.unit.${{ matrix.python-version }}
         run: |
           pytest -m unit --cov=src/api_service --cov=aimino_frontend \
             --cov-report=term-missing --cov-report=xml \
             --junit-xml=junit-unit-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
-            --cov-data-file=.coverage.unit.${{ matrix.python-version }} \
             -v
 
       - name: Upload coverage data
@@ -148,63 +149,6 @@ jobs:
         with:
           name: test-results-unit-${{ matrix.python-version }}
           path: junit-unit-${{ matrix.python-version }}.xml
-
-  # Merge Unit Tests Coverage
-  merge-unit-coverage:
-    name: Merge Unit Tests Coverage
-    runs-on: ubuntu-latest
-    needs: unit-tests
-    if: always()
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install coverage tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install coverage pytest-cov
-
-      - name: Download all unit coverage data
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-data-unit
-          merge-multiple: true
-
-      - name: Merge unit coverage reports
-        run: |
-          # List downloaded files for debugging
-          ls -la .coverage.unit.* 2>/dev/null || echo "No .coverage.unit.* files found"
-          # Combine all .coverage files
-          if ls .coverage.unit.* 1> /dev/null 2>&1; then
-            coverage combine .coverage.unit.*
-            # Generate merged reports
-            coverage xml -o coverage-unit-merged.xml
-            coverage html -d htmlcov-unit
-            coverage report --show-missing > coverage-unit-summary.txt
-            echo "Unit Tests Coverage Summary:"
-            cat coverage-unit-summary.txt
-          else
-            echo "⚠️  No coverage data files found, skipping merge"
-            # Create empty reports
-            touch coverage-unit-merged.xml coverage-unit-summary.txt
-            mkdir -p htmlcov-unit
-          fi
-
-      - name: Upload merged unit coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-unit
-          path: |
-            coverage-unit-merged.xml
-            htmlcov-unit/
-            coverage-unit-summary.txt
-          retention-days: 7
 
   # Integration Tests
   integration-tests:
@@ -245,12 +189,13 @@ jobs:
           pip install -e "aimino_frontend"
 
       - name: Run integration tests
+        env:
+          COVERAGE_FILE: .coverage.integration.${{ matrix.python-version }}
         run: |
           pytest -m integration --cov=src/api_service --cov=aimino_frontend \
             --cov-report=term-missing --cov-report=xml \
             --junit-xml=junit-integration-${{ matrix.python-version }}.xml \
             --cov-fail-under=0 \
-            --cov-data-file=.coverage.integration.${{ matrix.python-version }} \
             -v
 
       - name: Upload coverage data
@@ -268,63 +213,6 @@ jobs:
         with:
           name: test-results-integration-${{ matrix.python-version }}
           path: junit-integration-${{ matrix.python-version }}.xml
-
-  # Merge Integration Tests Coverage
-  merge-integration-coverage:
-    name: Merge Integration Tests Coverage
-    runs-on: ubuntu-latest
-    needs: integration-tests
-    if: always()
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install coverage tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install coverage pytest-cov
-
-      - name: Download all integration coverage data
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-data-integration
-          merge-multiple: true
-
-      - name: Merge integration coverage reports
-        run: |
-          # List downloaded files for debugging
-          ls -la .coverage.integration.* 2>/dev/null || echo "No .coverage.integration.* files found"
-          # Combine all .coverage files
-          if ls .coverage.integration.* 1> /dev/null 2>&1; then
-            coverage combine .coverage.integration.*
-            # Generate merged reports
-            coverage xml -o coverage-integration-merged.xml
-            coverage html -d htmlcov-integration
-            coverage report --show-missing > coverage-integration-summary.txt
-            echo "Integration Tests Coverage Summary:"
-            cat coverage-integration-summary.txt
-          else
-            echo "⚠️  No coverage data files found, skipping merge"
-            # Create empty reports
-            touch coverage-integration-merged.xml coverage-integration-summary.txt
-            mkdir -p htmlcov-integration
-          fi
-
-      - name: Upload merged integration coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-integration
-          path: |
-            coverage-integration-merged.xml
-            htmlcov-integration/
-            coverage-integration-summary.txt
-          retention-days: 7
 
   # System Tests (requires Docker image)
   system-tests:
@@ -414,16 +302,26 @@ jobs:
           black --check --line-length 120 src/api_service/ aimino_frontend/ || true
         continue-on-error: true
 
-  # Step 3: Test Summary (aggregates all test results)
+  # Step 3: Test Summary (aggregates all test results and merges coverage)
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, system-tests, lint-and-format, merge-unit-coverage, merge-integration-coverage]
+    needs: [unit-tests, integration-tests, system-tests, lint-and-format]
     if: always()
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install coverage pytest-cov
 
       - name: Download all test results
         uses: actions/download-artifact@v4
@@ -431,11 +329,47 @@ jobs:
           pattern: test-results-*
           merge-multiple: true
 
-      - name: Download merged coverage reports
+      - name: Download unit coverage data
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-report-*
+          pattern: coverage-data-unit
           merge-multiple: true
+
+      - name: Download integration coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-integration
+          merge-multiple: true
+
+      - name: Merge unit tests coverage
+        run: |
+          if ls .coverage.unit.* 1> /dev/null 2>&1; then
+            coverage combine .coverage.unit.*
+            coverage xml -o coverage-unit-merged.xml
+            coverage html -d htmlcov-unit
+            coverage report --show-missing > coverage-unit-summary.txt
+            echo "Unit Tests Coverage Summary:"
+            cat coverage-unit-summary.txt
+          else
+            echo "⚠️  No unit coverage data found"
+            touch coverage-unit-merged.xml coverage-unit-summary.txt
+            mkdir -p htmlcov-unit
+          fi
+
+      - name: Merge integration tests coverage
+        run: |
+          if ls .coverage.integration.* 1> /dev/null 2>&1; then
+            coverage combine .coverage.integration.*
+            coverage xml -o coverage-integration-merged.xml
+            coverage html -d htmlcov-integration
+            coverage report --show-missing > coverage-integration-summary.txt
+            echo "Integration Tests Coverage Summary:"
+            cat coverage-integration-summary.txt
+          else
+            echo "⚠️  No integration coverage data found"
+            touch coverage-integration-merged.xml coverage-integration-summary.txt
+            mkdir -p htmlcov-integration
+          fi
 
       - name: Check coverage threshold
         run: |
