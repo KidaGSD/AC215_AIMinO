@@ -862,6 +862,9 @@ jobs:
       name: production
       url: https://your-k8s-cluster-url.com
     
+    env:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -875,11 +878,11 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+        if: env.GCP_SA_KEY != ''
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+        if: env.GCP_SA_KEY != ''
 
       - name: Configure kubectl for GKE
         run: |
