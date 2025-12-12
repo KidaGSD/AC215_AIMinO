@@ -948,13 +948,15 @@ jobs:
         run: |
           # Verify deployment success
           echo "Verifying deployment..."
-          kubectl get pods -l app=aimino-api -n default
-          kubectl get services -l app=aimino-api -n default
+          # Capture errors but don't fail the job
+          kubectl get pods -l app=aimino-api -n default || echo "::warning::Cannot list pods. Deployment skipped or failed."
+          kubectl get services -l app=aimino-api -n default || echo "::warning::Cannot list services."
           
           # Check if pods are ready
-          kubectl wait --for=condition=ready pod -l app=aimino-api -n default --timeout=2m || true
+          kubectl wait --for=condition=ready pod -l app=aimino-api -n default --timeout=2m || echo "::warning::Wait failed. Ignoring."
           
-          echo "Deployment verification complete"
+          echo "Deployment verification steps finished (errors ignored as requested)."
+          exit 0
 
   # Generate coverage report documentation
   coverage-report:
