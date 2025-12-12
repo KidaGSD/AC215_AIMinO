@@ -93,6 +93,86 @@ napari
 
 ---
 
+## Kubernetes Deployment with Pulumi
+
+You can deploy the AIMinO API to a GKE cluster using the Pulumi projects copied from the cheese-app deployment.
+
+### Layout
+
+- `pulumi_deployment/deploy_images`: builds and pushes the `aimino-api-service` image to Google Artifact Registry.
+- `pulumi_deployment/deploy_k8s`: creates network + GKE cluster + namespace, and deploys the AIMinO API + load balancer.
+
+### Prerequisites
+
+- A GCP project and billing enabled.
+- `gcloud` CLI authenticated to your project.
+- Pulumi CLI installed and logged in.
+- Artifact Registry repository `aimino-repository` created in your chosen region.
+- Two GCP service accounts (names are examples; adjust to match your project):
+  - `deployment@<YOUR_PROJECT>.iam.gserviceaccount.com` (for GKE nodes).
+  - `gcp-service@<YOUR_PROJECT>.iam.gserviceaccount.com` (for Workload Identity).
+
+### 1. Configure Pulumi projects
+
+Edit the following files to match your environment:
+
+- `pulumi_deployment/deploy_images/Pulumi.dev.yaml`
+  - Set `gcp:project` to your GCP project ID.
+- `pulumi_deployment/deploy_k8s/Pulumi.dev.yaml`
+  - Set `gcp:project` to your GCP project ID.
+  - Set `security:gcp_service_account_email` to your node SA (e.g. `deployment@<YOUR_PROJECT>.iam.gserviceaccount.com`).
+  - Set `security:gcp_ksa_service_account_email` to your Workload Identity SA (e.g. `gcp-service@<YOUR_PROJECT>.iam.gserviceaccount.com`).
+- `pulumi_deployment/deploy_k8s/setup_containers.py`
+  - Update the `StackReference` to point to your Pulumi org/project/stack, for example:
+    - `images_stack = pulumi.StackReference("your-org/deploy-images/dev")`
+
+### 2. Build and push the AIMinO API image
+
+From the project root:
+
+```bash
+cd pulumi_deployment/deploy_images
+# Select or create the dev stack
+pulumi stack select dev || pulumi stack init dev
+
+# Set region for builds (must match your Artifact Registry)
+export GCP_REGION=us-central1
+
+pulumi up
+```
+
+This will build the AIMinO API image from the `AC215_AIMinO` source and push it to Artifact Registry, exporting tags used by the `deploy_k8s` stack.
+
+### 3. Create GKE cluster and deploy AIMinO
+
+```bash
+cd ../deploy_k8s
+pulumi stack select dev || pulumi stack init dev
+pulumi up
+```
+
+This creates the network, GKE cluster, namespace, Workload Identity bindings, and the AIMinO API `Deployment` + `Service` + ingress. It also runs `gcloud container clusters get-credentials ...` so that `kubectl` talks to the new cluster.
+
+### 4. Configure Gemini API key in the cluster
+
+The deployment expects a Kubernetes `Secret` containing your Gemini API key:
+
+- Namespace: `aimino-app-namespace`
+- Secret name: `aimino-gemini-secret`
+- Key: `GEMINI_API_KEY`
+
+Create it after the cluster is ready:
+
+```bash
+kubectl create secret generic aimino-gemini-secret \
+  --from-literal=GEMINI_API_KEY=<YOUR_GEMINI_API_KEY> \
+  -n aimino-app-namespace
+```
+
+After this, the AIMinO API pods in the cluster will have `GEMINI_API_KEY` injected from the secret and will be reachable via the load balancer URL printed in the `deploy_k8s` Pulumi outputs.
+
+---
+
 ## Supported Commands
 
 ### Context Management
