@@ -875,11 +875,11 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-        if: env.GCP_SA_KEY != ''
+        if: ${{ secrets.GCP_SA_KEY != '' }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        if: env.GCP_SA_KEY != ''
+        if: ${{ secrets.GCP_SA_KEY != '' }}
 
       - name: Configure kubectl for GKE
         run: |
@@ -898,9 +898,9 @@ jobs:
               chmod 600 $HOME/.kube/config
               echo "✓ KUBECONFIG configured successfully"
             else
-              echo "⚠️  Warning: Neither GCP_SA_KEY nor KUBECONFIG configured."
-              echo "⚠️  Deployment will be skipped."
-              exit 0
+              echo "❌ Error: Neither GCP_SA_KEY nor KUBECONFIG configured."
+              echo "Cannot deploy to Production without credentials."
+              exit 1
             fi
           fi
         env:
