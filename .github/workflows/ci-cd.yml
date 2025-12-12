@@ -887,6 +887,17 @@ jobs:
 
       - name: Configure kubectl for GKE
         run: |
+          # Debug: Verify Identity and Permissions
+          echo "=== DEBUG: GCloud Identity ==="
+          gcloud auth list
+          gcloud config list
+
+          echo "=== DEBUG: Enabled Services ==="
+          gcloud services list --enabled --filter="name:container.googleapis.com" || echo "Failed to list services"
+
+          echo "=== DEBUG: Cluster List ==="
+          gcloud container clusters list --project alpine-avatar-473401 || echo "Failed to list clusters (Permission Denied or API disabled)"
+          
           # For GKE clusters, use gcloud to get credentials
           if [ -n "$GCP_SA_KEY" ]; then
             gcloud container clusters get-credentials aimino-app-cluster \
