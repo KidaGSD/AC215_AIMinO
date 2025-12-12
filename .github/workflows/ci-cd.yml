@@ -880,10 +880,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
         if: env.GCP_SA_KEY != ''
+        continue-on-error: true
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         if: env.GCP_SA_KEY != ''
+        continue-on-error: true
 
       - name: Configure kubectl for GKE
         run: |
