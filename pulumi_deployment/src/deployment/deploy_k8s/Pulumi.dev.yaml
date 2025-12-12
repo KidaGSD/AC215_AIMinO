@@ -1,0 +1,7 @@
+encryptionsalt: v1:Ql1K//qmtaQ=:v1:fhFyMtpDtq0O41hJ:fA2sI27np3naGsGEOOg3GMoHM2TJfw==
+config:
+  gcp:project: alpine-avatar-473401-v1
+  security:ssh_user: sa_100110341521630214262
+  security:gcp_service_account_email: deployment@alpine-avatar-473401-v1.iam.gserviceaccount.com
+  security:gcp_ksa_service_account_email: gcp-service@alpine-avatar-473401-v1.iam.gserviceaccount.com
+  deploy-k8s:setupSSL: "false"

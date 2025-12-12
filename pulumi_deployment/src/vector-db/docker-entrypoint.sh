@@ -1,0 +1,23 @@
+#!/bin/bash
+
+echo "Container is running!!!"
+echo "Architecture: $(uname -m)"
+
+echo "Environment ready! Virtual environment activated."
+echo "Python version: $(python --version)"
+echo "UV version: $(uv --version)"
+
+# Activate virtual environment
+echo "Activating virtual environment..."
+source /.venv/bin/activate
+
+args="$@"
+echo $args
+
+if [[ -z ${args} ]]; 
+then
+    # Keep a shell open
+    exec /bin/bash
+else
+  uv run python $args
+fi
