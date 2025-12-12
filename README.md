@@ -125,12 +125,7 @@ The backend service runs in Docker. Build and run as shown in setup instructions
 3. Switch context: "Set marker to CD8"
 4. View layers: "Show all layers"
 
-### Environment Variables
 
-- `AIMINO_DATA_ROOT` - Data storage path (default: `~/AIMINO_DATA`)
-- `AIMINO_AUTLOAD_MAX_BYTES` - Auto-load size limit (default: 500MB)
-- `AIMINO_DISABLE_AUTOLOAD` - Disable auto-load (0/1)
-- `AIMINO_SKIP_16K_CHECK` - Skip dimension check (0/1)
 
 ## Known Issues and Limitations
 
