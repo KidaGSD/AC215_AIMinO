@@ -864,6 +864,7 @@ jobs:
     
     env:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
 
     steps:
       - name: Checkout code
@@ -887,7 +888,7 @@ jobs:
       - name: Configure kubectl for GKE
         run: |
           # For GKE clusters, use gcloud to get credentials
-          if [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+          if [ -n "$GCP_SA_KEY" ]; then
             gcloud container clusters get-credentials aimino-app-cluster \
               --zone us-central1 \
               --project alpine-avatar-473401
@@ -895,9 +896,9 @@ jobs:
           else
             echo "⚠️  GCP_SA_KEY not configured, trying KUBECONFIG..."
             # Fallback to KUBECONFIG if GCP_SA_KEY is not available
-            if [ -n "${{ secrets.KUBECONFIG }}" ]; then
+            if [ -n "$KUBECONFIG" ]; then
               mkdir -p $HOME/.kube
-              echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+              echo "$KUBECONFIG" > $HOME/.kube/config
               chmod 600 $HOME/.kube/config
               echo "✓ KUBECONFIG configured successfully"
             else
