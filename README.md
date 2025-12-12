@@ -28,7 +28,7 @@ AIMinO is an intelligent image analysis plugin for Napari that enables natural l
 
 **Key insight**: Server agents only generate commands; all data access and computation happens on the Napari client locally.
 
-## Quick Start
+## Prerequisites and Setup Instructions
 
 ### System Requirements
 
@@ -36,122 +36,111 @@ AIMinO is an intelligent image analysis plugin for Napari that enables natural l
 - **Docker**: >= 20.10
 - **Napari**: >= 0.4.0
 
-### 1. Install Frontend Plugin
+### Installation
 
-```bash
-# Install from PyPI 
-pip install aimino
-```
+1. **Install Frontend Plugin**
+   ```bash
+   pip install aimino
+   ```
 
+2. **Configure Backend**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add: GEMINI_API_KEY=your_api_key_here
+   ```
 
-### 2. Configure Backend
+3. **Start Backend Service**
+   ```bash
+   DOCKER_BUILDKIT=1 docker build -t aimino-api:dev -f src/api_service/Dockerfile .
+   docker run --rm -d -p 8000:8000 --name aimino-api --env-file .env aimino-api:dev
+   ```
 
-```bash
-# Create .env file in project root
-cp .env.example .env
-
-# Edit .env and add your Google Gemini API Key
-# GEMINI_API_KEY=your_api_key_here
-```
+4. **Start Frontend**
+   ```bash
+   napari
+   # In Napari menu: Plugins → AIMinO ChatBox
+   ```
 
 ### Data Storage
-- AIMinO stores uploaded TIFF/H5AD datasets and derived artifacts under `~/AIMINO_DATA` by default.
-- Override the location by setting `AIMINO_DATA_ROOT=/path/to/data` in your shell or `.env`.
-- To register existing files with the backend (remote workflows), POST to `/api/v1/datasets/register` with `{"image_path": "...", "h5ad_path": "...", "dataset_id": "...", "copy_files": false}`; the manifest is created server-side.
 
+- Default location: `~/AIMINO_DATA`
+- Override: set `AIMINO_DATA_ROOT=/path/to/data` in `.env`
+- Register existing files: POST to `/api/v1/datasets/register` with dataset info
 
-### 3. Start Backend Service
+## Deployment Instructions
 
-```bash
-# Build and start Docker container
-DOCKER_BUILDKIT=1 docker build -t aimino-api:dev -f src/api_service/Dockerfile .
-docker run --rm -d -p 8000:8000 --name aimino-api --env-file .env aimino-api:dev
+### Docker Deployment
 
+The backend service runs in Docker. Build and run as shown in setup instructions above.
 
-```
+### Kubernetes Deployment
 
-### 4. Start the Frontend
+1. **Prerequisites**
+   - Kubernetes cluster access (GKE or other)
+   - `kubectl` configured
+   - GitHub Secrets: `GCP_SA_KEY` (for GKE) or `KUBECONFIG`
 
-```bash
-# Launch Napari
-napari
+2. **Create Secrets**
+   ```bash
+   kubectl create secret generic aimino-secrets \
+     --from-literal=gemini-api-key=YOUR_API_KEY
+   ```
 
-# In Napari menu: Plugins → AIMinO ChatBox
-```
+3. **Deploy**
+   ```bash
+   kubectl apply -f k8s/deployment.yaml
+   kubectl rollout status deployment/aimino-api
+   ```
 
-## Running Guide (env toggles & safety)
-- `.env` defaults:
-  - `AIMINO_DATA_ROOT=~/AIMINO_DATA` (where manifests/caches are stored)
-  - `AIMINO_AUTLOAD_MAX_BYTES=500000000` (auto-load guard; set `0` to disable auto-load entirely)
-  - `AIMINO_DISABLE_AUTOLOAD=0` (set `1` to disable all auto-load paths; use "Show current marker layers" to load manually)
-  - `AIMINO_SKIP_16K_CHECK=0` (set `1` to skip 16k pixel dimension check; may cause slow loading or freezing)
-  - `AIMINO_AUTO_DOWNSAMPLE=0` (auto-downsample factor: 0=auto-calculate to fit 16k, 2=2x, 4=4x; recommended for large images)
-- Large image safety:
-  - If TIFF dimensions exceed 16k per axis or size exceeds `AIMINO_AUTLOAD_MAX_BYTES`, auto-load is skipped with a status message.
-  - For best performance, convert to multiscale (OME-Zarr or pyramidal OME-TIFF) and update `manifest.json` `image_path` to the multiscale asset.
-- Manual load: use the “Show current marker layers” button to load mask/density on demand (still respects size/dimension checks).
+4. **Automatic Deployment**
+   - CI/CD pipeline automatically deploys to Kubernetes when code is pushed to `main` branch
+   - Requires `GCP_SA_KEY` in GitHub Secrets
+   - See `.github/workflows/ci-cd.yml` for details
 
----
+## Usage Details and Examples
 
-## Supported Commands
+### Supported Commands
 
-### Context Management
-- `set_dataset` - Switch active dataset context
+**Context Management:**
+- `set_dataset` - Switch active dataset
 - `set_marker` - Switch active marker column
 - `list_datasets` - Show available datasets
 - `get_dataset_info` - Show current dataset details
-- `clear_processed_cache` - Free disk space
 
-### Analysis Commands
+**Analysis:**
 - `special_load_marker_data` - Load TIFF + h5ad pair
-- `special_show_mask` - Display binary mask for marker
+- `special_show_mask` - Display binary mask
 - `special_show_density` - Show density heatmap
-- `special_update_density` - Recompute density with parameters (sigma, colormap)
 - `special_compute_neighborhood` - Tumor microenvironment analysis
 
-### Viewer Commands
+**Viewer:**
 - Layer visibility (show/hide/toggle)
 - Camera control (zoom, center, angles)
 - Screenshot and export
 
-## Recent Updates (Data & UI)
-- **Context commands**: Added `set_dataset`, `set_marker`, `list_datasets`, `get_dataset_info`, `clear_processed_cache` for session management.
-- **Improved LeadManager**: Better error messages when dataset_id or marker is missing; shows available options.
-- **Updated handbooks**: All workers now document `force_recompute`, `sigma`, `radius` parameters with defaults.
-- Added `DataStore`-based ingest with manifest (auto dataset_id, link-by-default, hash/mtime checks).
-- Napari Data Import Dock auto-detects marker columns from h5ad (bool / `*_positive`) and saves to manifest; will auto-load mask/density when safe.
-- Added safety guard for large data: auto-load is skipped if file size exceeds `AIMINO_AUTLOAD_MAX_BYTES` (default 500MB) or image dimensions exceed 16k; status panel shows guidance.
-- "Show current marker layers" now reuses the same guard; it warns before forcing a large load.
-- New cache cleanup and marker-layer highlight buttons; remote register option uses `/api/v1/datasets/register`.
-- Added `AIMINO_DISABLE_AUTOLOAD=1` toggle: disables all auto-load paths (dataset selection, marker change, ingest). Use "Show current marker layers" to load manually.
-- Agent/Backend updates: added data_ingest/mask_density/neighborhood/context workers and validation in LeadManager; `/api/v1/datasets/register` endpoint; handbooks/task_parser updated.
-- Core handlers now resolve via DataStore; command models include dataset_id/sigma/radius/force options.
-- Tests: added `tests/test_data_store.py`, `tests/test_pipeline_e2e.py`, and `tests/test_context_commands.py`.
+### Example Usage
 
-## Known Issues & Mitigations
-- **Large images (>16k pixels per axis)**: Napari/VisPy will downsample and may freeze. Use a downsampled/pyramidal copy (OME-Zarr or pyramidal OME-TIFF) for visualization; point `manifest.json` `image_path` to the multiscale asset.
-- **Huge files**: auto-load skips when size > `AIMINO_AUTLOAD_MAX_BYTES`. Adjust via `.env` or shell. Forcing load can still be slow; prefer multiscale data. 1
-- **Backend threads for heavy loads**: current Napari handlers run on the main thread. For very large data, precompute/crop or convert to multiscale. (Planned: background load + progress UI.)
+1. Load dataset: "Load the marker data for dataset X"
+2. Show analysis: "Show density for marker Y"
+3. Switch context: "Set marker to CD8"
+4. View layers: "Show all layers"
 
-## Recommendations for Large Datasets1
-1) Convert raw TIFF to multiscale (preferred):
-   - OME-Zarr pyramid: write multiscale and set `manifest["image_path"]` to the `.zarr` directory.
-   - Pyramidal OME-TIFF (SubIFD levels).
-2) Keep auto-load threshold conservative (`AIMINO_AUTLOAD_MAX_BYTES=500000000` in `.env`).
-3) If you must force-load: use “Show current marker layers” but expect slower performance; consider cropping/ROI instead of full-frame.
+### Environment Variables
 
-### Possible downsample workaround (not tested)
-Use a lightweight preview TIFF for napari display, keep the original for computation:
-```bash
-conda run -n aimino python - <<'PY'
-import tifffile
-src = "LSP16767.ome.tif"          # path to original
-dst = "LSP16767_downsample4x.tif"
-with tifffile.TiffFile(src) as tf:
-    arr = tf.asarray()
-arr_ds = arr[::4, ::4]            # adjust slicing if multichannel
-tifffile.imwrite(dst, arr_ds, bigtiff=True)
-print("saved:", dst, arr_ds.shape)
-PY
-```
-Then edit `~/AIMINO_DATA/<dataset_id>/manifest.json` to point `image_path` to the downsampled file. For best results, create a multiscale OME-Zarr or pyramidal OME-TIFF and point the manifest to that asset.
+- `AIMINO_DATA_ROOT` - Data storage path (default: `~/AIMINO_DATA`)
+- `AIMINO_AUTLOAD_MAX_BYTES` - Auto-load size limit (default: 500MB)
+- `AIMINO_DISABLE_AUTOLOAD` - Disable auto-load (0/1)
+- `AIMINO_SKIP_16K_CHECK` - Skip dimension check (0/1)
+
+## Known Issues and Limitations
+
+1. **Large Images (>16k pixels)**: May cause Napari to freeze. Use multiscale formats (OME-Zarr or pyramidal OME-TIFF).
+
+2. **Large Files**: Auto-load is skipped when file size exceeds `AIMINO_AUTLOAD_MAX_BYTES`. Adjust threshold or use multiscale data.
+
+3. **Performance**: Heavy computations run on main thread. For very large datasets, precompute or convert to multiscale format.
+
+4. **Recommendations**: 
+   - Convert TIFF to multiscale OME-Zarr for best performance
+   - Keep auto-load threshold conservative (500MB default)
+   - Use "Show current marker layers" button for manual loading
